@@ -1,0 +1,35 @@
+{
+  "name": "@researchbuddy/core",
+  "version": "0.1.0",
+  "description": "Platform-agnostic domain logic for Researchbuddy: learning ladders, spaced repetition, literature retrieval and digest building",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./anthropic": {
+      "types": "./dist/ai/anthropic.d.ts",
+      "default": "./dist/ai/anthropic.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
+    "test:live": "tsc -p tsconfig.test.json && RESEARCHBUDDY_LIVE=1 node --test dist-test/test/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "researchbuddy",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Guided self-education and research digest tool for medicine and the life sciences",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @researchbuddy/core",
+    "test": "npm run test --workspace @researchbuddy/core",
+    "typecheck": "npm run typecheck --workspace @researchbuddy/core"
+  },
+  "license": "UNLICENSED",
+  "overrides": {
+    "react-native": "0.86.2"
+  }
+}
