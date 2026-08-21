@@ -1,4 +1,10 @@
-export { OfflineProvider, splitStructuredAbstract, sentences, firstSentence, makeCloze } from './offline.js';
+export {
+  OfflineProvider,
+  splitStructuredAbstract,
+  sentences,
+  firstSentence,
+  makeCloze,
+} from './offline.js';
 export type {
   AiProvider,
   CardDraft,

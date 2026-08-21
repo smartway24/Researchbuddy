@@ -144,7 +144,11 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               style={styles.input}
               accessibilityLabel="Anthropic API key"
             />
-            <Button label="Save key" onPress={() => void saveKey()} disabled={apiKey.trim().length === 0} />
+            <Button
+              label="Save key"
+              onPress={() => void saveKey()}
+              disabled={apiKey.trim().length === 0}
+            />
           </>
         )}
       </Card>
@@ -175,9 +179,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       <Card>
         <Subheading>Your data</Subheading>
         <Muted>
-          Researchbuddy has no server and no account. Your topics, cards, and review history
-          live on this device; searches are cached here too, which is what lets a reading list
-          open with no signal. Export a copy whenever you want — it is plain JSON.
+          Researchbuddy has no server and no account. Your topics, cards, and review history live on
+          this device; searches are cached here too, which is what lets a reading list open with no
+          signal. Export a copy whenever you want — it is plain JSON.
         </Muted>
         <Button
           label="Export"

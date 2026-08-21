@@ -11,7 +11,10 @@ const context = {
 
 test('multi-word terms are quoted and single words are not', () => {
   assert.equal(quoteTerm('ECMO'), 'ECMO');
-  assert.equal(quoteTerm('Extracorporeal Membrane Oxygenation'), '"Extracorporeal Membrane Oxygenation"');
+  assert.equal(
+    quoteTerm('Extracorporeal Membrane Oxygenation'),
+    '"Extracorporeal Membrane Oxygenation"',
+  );
 });
 
 test('characters that would break the query parser are stripped', () => {
@@ -37,7 +40,11 @@ test('a few synonyms widen the query without unbounding it', () => {
     synonyms: ['Extracorporeal Life Support', 'ECLS Treatment', 'a', 'b', 'c', 'd'],
   });
   assert.match(clause, /"Extracorporeal Life Support"\[Title\/Abstract\]/);
-  assert.equal((clause.match(/\[Title\/Abstract\]/g) ?? []).length, 5, 'topic plus at most four synonyms');
+  assert.equal(
+    (clause.match(/\[Title\/Abstract\]/g) ?? []).length,
+    5,
+    'topic plus at most four synonyms',
+  );
 });
 
 test('every rung produces a usable, explained plan', () => {

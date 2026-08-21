@@ -45,13 +45,16 @@ export class OfflineProvider implements AiProvider {
     const limitations = sections.get('limitations');
     if (limitations) caveats.push(...sentences(limitations).slice(0, 2));
     if (methods) {
-      const sample = /\b(n\s*=\s*[\d,]+|\d[\d,]* (?:patients|participants|subjects))\b/i.exec(methods);
+      const sample = /\b(n\s*=\s*[\d,]+|\d[\d,]* (?:patients|participants|subjects))\b/i.exec(
+        methods,
+      );
       if (sample?.[0]) caveats.push(`Sample: ${sample[0]}.`);
       if (/retrospective|single[- ]cent(re|er)/i.test(methods)) {
         caveats.push('Retrospective or single-centre design.');
       }
     }
-    if (!paper.abstract) caveats.push('No abstract indexed — read the full text before relying on this.');
+    if (!paper.abstract)
+      caveats.push('No abstract indexed — read the full text before relying on this.');
 
     return {
       headline: headline.trim(),
@@ -172,8 +175,9 @@ export function makeCloze(sentence: string): { front: string; back: string } | n
   if (sentence.length > 320) return null;
 
   const measured =
-    /\b\d+(?:\.\d+)?\s?(?:%|mg|mL|mmHg|L\/min|hours?|days?|weeks?|months?|years?)\b/i.exec(sentence)?.[0] ??
-    /\b\d+(?:\.\d+)?\b/.exec(sentence)?.[0];
+    /\b\d+(?:\.\d+)?\s?(?:%|mg|mL|mmHg|L\/min|hours?|days?|weeks?|months?|years?)\b/i.exec(
+      sentence,
+    )?.[0] ?? /\b\d+(?:\.\d+)?\b/.exec(sentence)?.[0];
   if (measured) {
     return { front: sentence.replace(measured, '_____'), back: measured };
   }

@@ -67,7 +67,13 @@ export function ProgressBar({ value }: { value: number }) {
   );
 }
 
-export function Pill({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'warning' | 'success' }) {
+export function Pill({
+  label,
+  tone = 'neutral',
+}: {
+  label: string;
+  tone?: 'neutral' | 'warning' | 'success';
+}) {
   const color =
     tone === 'warning' ? theme.warning : tone === 'success' ? theme.success : theme.muted;
   return (
@@ -90,9 +96,18 @@ const styles = StyleSheet.create({
   subheading: { color: theme.text, fontSize: 16, fontWeight: '600', marginBottom: spacing.xs },
   body: { color: theme.text, fontSize: 15, lineHeight: 21 },
   muted: { color: theme.muted, fontSize: 13, lineHeight: 18 },
-  button: { borderRadius: 10, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, alignItems: 'center' },
+  button: {
+    borderRadius: 10,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+  },
   buttonPrimary: { backgroundColor: theme.accent },
-  buttonSecondary: { backgroundColor: 'transparent', borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border },
+  buttonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.border,
+  },
   buttonDimmed: { opacity: 0.6 },
   buttonPrimaryText: { color: theme.accentText, fontWeight: '600', fontSize: 15 },
   buttonSecondaryText: { color: theme.text, fontWeight: '600', fontSize: 15 },

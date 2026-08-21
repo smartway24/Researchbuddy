@@ -22,18 +22,18 @@ the last two years at the top. A rung unlocks when your recall of the one below 
 holds up, so frontier papers never arrive before you can read them critically.
 
 **Canonicalisation.** You type "ECMO"; the app resolves it against MeSH to
-*Extracorporeal Membrane Oxygenation*, keeps NLM's definition, and searches on the
+_Extracorporeal Membrane Oxygenation_, keeps NLM's definition, and searches on the
 descriptor plus its entry terms. Precise queries, for free, from what you typed.
 
 **The concept neighbourhood.** The "flurry of ideas around the concept" is derived
 from data, not guessed: MeSH indexing on the papers a topic returns is a hand-curated
 map of what that topic is about. Counting co-occurring descriptors and dropping the
-ones that are everywhere gives you the real neighbours — for ECMO: *Respiration,
-Artificial*; *ARDS*; *Cannula*; *Heart Arrest*; *Patient Selection*.
+ones that are everywhere gives you the real neighbours — for ECMO: _Respiration,
+Artificial_; _ARDS_; _Cannula_; _Heart Arrest_; _Patient Selection_.
 
 **Ranked, themed, explained.** Papers are classified by evidence level, scored against
 the rung you are on, grouped into themes, and put in reading order. Every paper shows
-*why* it is on the list. Ranking you cannot see is worse than no ranking.
+_why_ it is on the list. Ranking you cannot see is worse than no ranking.
 
 **Recall that means something.** Cards are generated from what you read and scheduled
 with SM-2. Mastery per rung is the mean retention strength of that rung's cards, and
@@ -67,17 +67,17 @@ apps/mobile/      Expo / React Native app, built for the iOS App Store.
 
 `@researchbuddy/core` is the whole product minus the screens:
 
-| Module | What it does |
-|---|---|
-| `ladder.ts` | The six rungs, unlock gating, concept ordering |
-| `srs.ts` | SM-2 scheduling, due queues, per-rung mastery |
-| `query.ts` | Topic → the right PubMed query for each rung |
-| `rank.ts` | Evidence classification and rung-aware scoring, with reasons |
-| `concepts.ts` | Concept neighbourhood and theming from MeSH co-occurrence |
-| `digest.ts` | Retrieved papers → a themed, ordered reading list |
-| `sources/` | PubMed, Europe PMC, MeSH lookup, institutional access, dedupe |
-| `cache.ts` | On-device TTL cache and source wrapper; what replaces a backend |
-| `ai/` | Optional model layer, with an extractive on-device default |
+| Module        | What it does                                                    |
+| ------------- | --------------------------------------------------------------- |
+| `ladder.ts`   | The six rungs, unlock gating, concept ordering                  |
+| `srs.ts`      | SM-2 scheduling, due queues, per-rung mastery                   |
+| `query.ts`    | Topic → the right PubMed query for each rung                    |
+| `rank.ts`     | Evidence classification and rung-aware scoring, with reasons    |
+| `concepts.ts` | Concept neighbourhood and theming from MeSH co-occurrence       |
+| `digest.ts`   | Retrieved papers → a themed, ordered reading list               |
+| `sources/`    | PubMed, Europe PMC, MeSH lookup, institutional access, dedupe   |
+| `cache.ts`    | On-device TTL cache and source wrapper; what replaces a backend |
+| `ai/`         | Optional model layer, with an extractive on-device default      |
 
 ## Data sources
 
@@ -96,7 +96,7 @@ Two things Researchbuddy deliberately does not do: it never stores or replays yo
 library credentials, and it never fetches, caches, or re-hosts anything behind a
 paywall. It links to what you are entitled to; it does not redistribute it.
 
-*Searching inside* licensed databases (Embase, Scopus, Ovid, Web of Science) needs a
+_Searching inside_ licensed databases (Embase, Scopus, Ovid, Web of Science) needs a
 licensed API key issued to your institution. The source layer is a pluggable adapter
 interface built for exactly that — see "Not built yet".
 
@@ -126,11 +126,34 @@ npm test                 # 91 tests, all offline against fixtures
 npm run test:live -w @researchbuddy/core   # also hits the real PubMed / Europe PMC APIs
 
 cd apps/mobile
-npx expo start           # then press i for the iOS simulator
+npx expo start           # then scan the QR code with Expo Go
 ```
 
-For a device build or a TestFlight/App Store submission, use EAS (`eas build -p ios`),
-which needs an Apple Developer account and a Mac or EAS's build servers.
+`npm run verify` runs typecheck, lint, and tests together — that is the gate before
+anything is published.
+
+## Releasing
+
+Credentials live on EAS; no Mac and no Xcode are involved.
+
+```bash
+npm run verify
+cd apps/mobile
+EXPO_TOKEN=<token> npx eas-cli@latest build \
+  --platform ios --profile production --non-interactive --auto-submit
+```
+
+Build numbers are remote and auto-incremented; `version` in `app.json` is the
+marketing version and is bumped by hand. `runtimeVersion` is on the `fingerprint`
+policy from the first build, so an over-the-air update can never reach a binary
+that lacks the native code it needs.
+
+Two placeholders in `apps/mobile/eas.json` must be filled before the first build —
+`submit.production.ios.ascAppId` and `appleTeamId` — or a finished build has nowhere
+to go. `npx eas init` writes the project id.
+
+JavaScript changes ship over the air in about two minutes; a build is only needed
+when the binary changes. See `CLAUDE.md` for the full workflow.
 
 ## Not built yet
 

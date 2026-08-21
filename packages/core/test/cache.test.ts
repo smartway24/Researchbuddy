@@ -91,8 +91,14 @@ test('cache keys are stable and separate different queries', () => {
   const query: SearchQuery = { term: 'ecmo', limit: 10, fromYear: 2024 };
   assert.equal(searchCacheKey('pubmed', query), searchCacheKey('pubmed', { ...query }));
   assert.notEqual(searchCacheKey('pubmed', query), searchCacheKey('europepmc', query));
-  assert.notEqual(searchCacheKey('pubmed', query), searchCacheKey('pubmed', { ...query, limit: 20 }));
-  assert.notEqual(searchCacheKey('pubmed', query), searchCacheKey('pubmed', { ...query, fromYear: 2020 }));
+  assert.notEqual(
+    searchCacheKey('pubmed', query),
+    searchCacheKey('pubmed', { ...query, limit: 20 }),
+  );
+  assert.notEqual(
+    searchCacheKey('pubmed', query),
+    searchCacheKey('pubmed', { ...query, fromYear: 2020 }),
+  );
 });
 
 test('a repeated search hits the cache instead of the network', async () => {
@@ -122,7 +128,7 @@ test('losing the network falls back to the stale copy rather than failing', asyn
   const offline = await source.search({ term: 'ecmo' });
   assert.equal(offline.fromCache, true);
   assert.equal(offline.savedAt, START.toISOString());
-  assert.equal(offline.papers.length, 1, 'the reading list survives with yesterday\'s papers');
+  assert.equal(offline.papers.length, 1, "the reading list survives with yesterday's papers");
 });
 
 test('a failure with nothing cached still surfaces as an error', async () => {

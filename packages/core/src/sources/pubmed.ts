@@ -104,7 +104,9 @@ function applyDateRange(query: SearchQuery): string {
 
 export function parsePubmedXml(xml: string): Paper[] {
   const document = parseXml(xml);
-  return findAll(document, 'PubmedArticle').map(parseArticle).filter((p): p is Paper => p !== null);
+  return findAll(document, 'PubmedArticle')
+    .map(parseArticle)
+    .filter((p): p is Paper => p !== null);
 }
 
 function parseArticle(node: XmlNode): Paper | null {
@@ -135,7 +137,9 @@ function parseArticle(node: XmlNode): Paper | null {
     meshTerms: findAll(citation, 'MeshHeading')
       .map((heading) => textContent(firstNamed(heading, 'DescriptorName')))
       .filter(Boolean),
-    keywords: findAll(citation, 'Keyword').map((n) => textContent(n)).filter(Boolean),
+    keywords: findAll(citation, 'Keyword')
+      .map((n) => textContent(n))
+      .filter(Boolean),
     url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
   };
 
@@ -182,8 +186,18 @@ function parseAuthors(article: XmlNode): string[] {
 }
 
 const MONTHS: Record<string, string> = {
-  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
-  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+  jan: '01',
+  feb: '02',
+  mar: '03',
+  apr: '04',
+  may: '05',
+  jun: '06',
+  jul: '07',
+  aug: '08',
+  sep: '09',
+  oct: '10',
+  nov: '11',
+  dec: '12',
 };
 
 function parsePubDate(article: XmlNode): { year?: number; publishedAt?: string } {
@@ -197,7 +211,8 @@ function parsePubDate(article: XmlNode): { year?: number; publishedAt?: string }
   if (Number.isNaN(year)) return {};
 
   const monthText = textContent(firstNamed(pubDate, 'Month'));
-  const month = MONTHS[monthText.slice(0, 3).toLowerCase()] ??
+  const month =
+    MONTHS[monthText.slice(0, 3).toLowerCase()] ??
     (/^\d{1,2}$/.test(monthText) ? monthText.padStart(2, '0') : undefined);
   if (!month) return { year, publishedAt: String(year) };
 

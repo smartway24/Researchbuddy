@@ -25,6 +25,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { NCBI_CONTACT_EMAIL, NCBI_TOOL_NAME } from '../config';
 import { searchCache } from './cache';
 import { emptyDatabase, loadDatabase, saveDatabase, type Database, type Settings } from './db';
 
@@ -167,7 +168,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const existing = new Set(previous.concepts.map((concept) => concept.id));
       return {
         ...previous,
-        concepts: [...previous.concepts, ...concepts.filter((concept) => !existing.has(concept.id))],
+        concepts: [
+          ...previous.concepts,
+          ...concepts.filter((concept) => !existing.has(concept.id)),
+        ],
       };
     });
   }, []);
@@ -189,7 +193,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setDatabase((previous) => {
       const now = new Date();
       const current: ReviewState =
-        previous.reviews.find((state) => state.cardId === cardId) ?? initialReviewState(cardId, now);
+        previous.reviews.find((state) => state.cardId === cardId) ??
+        initialReviewState(cardId, now);
       const next = applyReview(current, grade, now);
       return {
         ...previous,
@@ -217,11 +222,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const sources = useCallback(
     () =>
       withCache(
-        defaultSources(
-          database.settings.ncbiApiKey
-            ? { pubmed: { apiKey: database.settings.ncbiApiKey, tool: 'researchbuddy' } }
-            : {},
-        ),
+        defaultSources({
+          pubmed: {
+            tool: NCBI_TOOL_NAME,
+            ...(NCBI_CONTACT_EMAIL ? { email: NCBI_CONTACT_EMAIL } : {}),
+            ...(database.settings.ncbiApiKey ? { apiKey: database.settings.ncbiApiKey } : {}),
+          },
+        }),
         searchCache,
       ),
     [database.settings.ncbiApiKey],
@@ -243,8 +250,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       sources,
     }),
     [
-      ready, database, progressFor, addTopic, enrichTopic, removeTopic, addConcepts,
-      addCards, gradeCard, markPapersSeen, updateSettings, sources,
+      ready,
+      database,
+      progressFor,
+      addTopic,
+      enrichTopic,
+      removeTopic,
+      addConcepts,
+      addCards,
+      gradeCard,
+      markPapersSeen,
+      updateSettings,
+      sources,
     ],
   );
 

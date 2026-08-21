@@ -36,53 +36,72 @@ export function DigestScreen({
   const { database, markPapersSeen, addConcepts, addCards, sources } = useAppState();
   const topic = database.topics.find((candidate) => candidate.id === topicId);
 
-  const [digest, setDigest] = useState<Digest | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  /**
+   * One request key describes what this screen should be showing. State holds
+   * the result *for a key*, so "loading" is derived rather than stored — no
+   * synchronous setState in the effect, and no window where the previous
+   * rung's papers render under the new rung's heading.
+   */
+  const requestKey = `${topicId}|${rung}|${topic?.meshTerm ?? topic?.canonicalTerm ?? ''}`;
+  const [result, setResult] = useState<{
+    key: string;
+    digest?: Digest;
+    error?: string;
+  } | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+
+  const loading = result?.key !== requestKey;
+  const digest = result?.key === requestKey ? result.digest : undefined;
+  const error = result?.key === requestKey ? result.error : undefined;
 
   const seen = useMemo(
     () => new Set(database.seenPapers[topicId] ?? []),
     [database.seenPapers, topicId],
   );
 
-  const load = useCallback(async () => {
-    if (!topic) return;
+  useEffect(() => {
+    if (!topic) return undefined;
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await buildDigest({
-        topicId,
-        rung,
-        context: {
-          topic: topic.canonicalTerm,
-          ...(topic.meshTerm ? { meshTerm: topic.meshTerm } : {}),
-          synonyms: topic.synonyms,
-        },
-        sources: sources(),
-        seenPaperIds: seen,
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) return;
-      setDigest(result);
-    } catch (caught) {
-      if (controller.signal.aborted) return;
-      setError(caught instanceof Error ? caught.message : 'Could not reach the literature sources.');
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
-    // `seen` is intentionally excluded: marking a paper read should not
-    // re-run the search and reshuffle the list under the learner's finger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic, topicId, rung, sources]);
 
-  useEffect(() => {
-    void load();
-    return () => abortRef.current?.abort();
-  }, [load]);
+    // Every state update below happens after an await, once the request this
+    // effect owns has actually produced something.
+    void (async () => {
+      try {
+        const built = await buildDigest({
+          topicId,
+          rung,
+          context: {
+            topic: topic.canonicalTerm,
+            ...(topic.meshTerm ? { meshTerm: topic.meshTerm } : {}),
+            synonyms: topic.synonyms,
+          },
+          sources: sources(),
+          seenPaperIds: seen,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        setResult({ key: requestKey, digest: built });
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        setResult({
+          key: requestKey,
+          error:
+            caught instanceof Error ? caught.message : 'Could not reach the literature sources.',
+        });
+      }
+    })();
+
+    return () => controller.abort();
+    // `seen` is deliberately excluded: marking a paper read must not re-run the
+    // search and reshuffle the list under the learner's finger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topic, topicId, rung, sources, requestKey, reloadNonce]);
+
+  const reload = useCallback(() => setReloadNonce((nonce) => nonce + 1), []);
 
   const provider: AiProvider = useMemo(() => new OfflineProvider(), []);
 
@@ -154,19 +173,15 @@ export function DigestScreen({
         await Linking.openURL(first.url);
         return;
       }
-      Alert.alert(
-        'Open full text',
-        'Choose how to read this paper.',
-        [
-          ...links.slice(0, 3).map((link) => ({
-            text: link.requiresLogin ? `${link.label} (login)` : link.label,
-            onPress: () => {
-              void Linking.openURL(link.url);
-            },
-          })),
-          { text: 'Cancel', style: 'cancel' as const },
-        ],
-      );
+      Alert.alert('Open full text', 'Choose how to read this paper.', [
+        ...links.slice(0, 3).map((link) => ({
+          text: link.requiresLogin ? `${link.label} (login)` : link.label,
+          onPress: () => {
+            void Linking.openURL(link.url);
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]);
     },
     [database.settings.institutions],
   );
@@ -208,7 +223,7 @@ export function DigestScreen({
           <Subheading>Could not load the reading list</Subheading>
           <Body>{error}</Body>
           <View style={styles.retry}>
-            <Button label="Try again" onPress={() => void load()} />
+            <Button label="Try again" onPress={reload} />
           </View>
         </Card>
       ) : null}
@@ -253,8 +268,8 @@ export function DigestScreen({
             <Card>
               <Subheading>Nothing new</Subheading>
               <Muted>
-                Every paper this search found is already marked read. Try a different rung, or
-                widen the topic.
+                Every paper this search found is already marked read. Try a different rung, or widen
+                the topic.
               </Muted>
             </Card>
           ) : null}
@@ -271,7 +286,9 @@ export function DigestScreen({
                   </Muted>
                   <View style={styles.pills}>
                     <Pill label={evidenceLabel(scored.evidenceLevel)} />
-                    {scored.paper.openAccessUrl ? <Pill label="Free full text" tone="success" /> : null}
+                    {scored.paper.openAccessUrl ? (
+                      <Pill label="Free full text" tone="success" />
+                    ) : null}
                     {seen.has(scored.paper.id) ? <Pill label="Read" /> : null}
                   </View>
                   {scored.reasons.slice(0, 3).map((reason) => (

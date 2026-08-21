@@ -1,0 +1,41 @@
+# NOT YET VALIDATED — run `eas workflow:validate .eas/workflows/build-and-submit.yml`
+# before relying on it. Requires `submit.production.ios.ascAppId` and
+# `appleTeamId` to be filled in in apps/mobile/eas.json first, or the submit
+# step stops dead in non-interactive mode.
+name: Build and submit to TestFlight
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Typecheck, lint and tests
+    steps:
+      - uses: eas/checkout
+      - uses: eas/install_node_modules
+      # Steps run in the Expo project directory (apps/mobile), but these
+      # scripts live at the workspace root, hence --prefix.
+      - name: Build core
+        run: npm --prefix ../.. run build
+      - name: Typecheck
+        run: npm --prefix ../.. run typecheck
+      - name: Lint
+        run: npm --prefix ../.. run lint
+      - name: Tests
+        run: npm --prefix ../.. test
+
+  build:
+    name: Build iOS
+    needs: [verify]
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit:
+    name: Upload to TestFlight
+    needs: [build]
+    type: submit
+    params:
+      build_id: ${{ needs.build.outputs.build_id }}
+      profile: production

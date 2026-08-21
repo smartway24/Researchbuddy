@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Card, Concept, ReviewState, Topic } from '@researchbuddy/core';
-import type { Institution } from '@researchbuddy/core';
+import type { Card, Concept, Institution, ReviewState, Topic } from '@researchbuddy/core';
 
 /**
  * Local-first storage. Everything the learner accumulates — topics, cards,

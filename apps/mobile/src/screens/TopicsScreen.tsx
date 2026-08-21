@@ -33,8 +33,8 @@ export function TopicsScreen({ onOpenTopic }: { onOpenTopic: (topicId: string) =
     <ScrollView contentContainerStyle={styles.container}>
       <Heading>What do you want to learn?</Heading>
       <Muted>
-        Name a process, a device, a drug, a disease. Researchbuddy builds the path from
-        fundamentals up to current research, and does the searching for you.
+        Name a process, a device, a drug, a disease. Researchbuddy builds the path from fundamentals
+        up to current research, and does the searching for you.
       </Muted>
 
       <View style={styles.addRow}>
@@ -92,7 +92,12 @@ export function TopicsScreen({ onOpenTopic }: { onOpenTopic: (topicId: string) =
 
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingBottom: spacing.xl },
-  addRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', marginVertical: spacing.md },
+  addRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+    marginVertical: spacing.md,
+  },
   input: {
     flex: 1,
     borderWidth: StyleSheet.hairlineWidth,

@@ -73,11 +73,7 @@ export function isDue(state: ReviewState, now: Date = new Date()): boolean {
  * Cards to study right now: everything overdue, longest-overdue first, then
  * cards never seen. `limit` keeps a session finishable in one sitting.
  */
-export function dueQueue(
-  states: ReviewState[],
-  now: Date = new Date(),
-  limit = 20,
-): ReviewState[] {
+export function dueQueue(states: ReviewState[], now: Date = new Date(), limit = 20): ReviewState[] {
   return states
     .filter((state) => isDue(state, now))
     .sort((a, b) => {

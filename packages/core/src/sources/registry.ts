@@ -79,7 +79,8 @@ export function dedupe(papers: Paper[]): Paper[] {
       byKey.set(key, paper);
       continue;
     }
-    const [keep, drop] = richness(paper) > richness(existing) ? [paper, existing] : [existing, paper];
+    const [keep, drop] =
+      richness(paper) > richness(existing) ? [paper, existing] : [existing, paper];
     byKey.set(key, mergePapers(keep, drop));
   }
 
@@ -89,7 +90,10 @@ export function dedupe(papers: Paper[]): Paper[] {
 function dedupeKey(paper: Paper): string {
   if (paper.doi) return `doi:${paper.doi.toLowerCase()}`;
   if (paper.pmid) return `pmid:${paper.pmid}`;
-  return `title:${paper.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}`;
+  return `title:${paper.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()}`;
 }
 
 function richness(paper: Paper): number {

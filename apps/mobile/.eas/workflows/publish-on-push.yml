@@ -1,0 +1,36 @@
+# NOT YET VALIDATED — run `eas workflow:validate .eas/workflows/publish-on-push.yml`
+# and one manual run before trusting this.
+#
+# The design rule, taken from the Cheshbon handoff: updates automate, builds
+# stay manual. A JS-only change reaches a tester in about two minutes and costs
+# nothing; a build costs credits and only helps when the binary changed.
+name: Publish update on push to main
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  verify:
+    name: Typecheck, lint and tests
+    steps:
+      - uses: eas/checkout
+      - uses: eas/install_node_modules
+      # Steps run in the Expo project directory (apps/mobile), but these
+      # scripts live at the workspace root, hence --prefix.
+      - name: Build core
+        run: npm --prefix ../.. run build
+      - name: Typecheck
+        run: npm --prefix ../.. run typecheck
+      - name: Lint
+        run: npm --prefix ../.. run lint
+      - name: Tests
+        run: npm --prefix ../.. test
+
+  publish:
+    name: Publish to the preview channel
+    needs: [verify]
+    type: update
+    params:
+      branch: preview
+      platform: ios

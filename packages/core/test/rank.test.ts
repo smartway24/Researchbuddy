@@ -1,18 +1,29 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { classifyEvidence, paperAgeYears, rankPapers, scorePaper, topicalFit } from '../src/rank.js';
+import {
+  classifyEvidence,
+  paperAgeYears,
+  rankPapers,
+  scorePaper,
+  topicalFit,
+} from '../src/rank.js';
 import { makePaper } from './helpers.js';
 
 const NOW = new Date('2026-06-01T00:00:00Z');
 
 test('classifies by publication type, strongest label winning', () => {
-  assert.equal(classifyEvidence(makePaper({ publicationTypes: ['Practice Guideline'] })), 'guideline');
+  assert.equal(
+    classifyEvidence(makePaper({ publicationTypes: ['Practice Guideline'] })),
+    'guideline',
+  );
   assert.equal(
     classifyEvidence(makePaper({ publicationTypes: ['Journal Article', 'Meta-Analysis'] })),
     'systematic-review',
   );
   assert.equal(
-    classifyEvidence(makePaper({ publicationTypes: ['Randomized Controlled Trial', 'Journal Article'] })),
+    classifyEvidence(
+      makePaper({ publicationTypes: ['Randomized Controlled Trial', 'Journal Article'] }),
+    ),
     'rct',
   );
   assert.equal(classifyEvidence(makePaper({ publicationTypes: ['Review'] })), 'narrative-review');
@@ -29,7 +40,11 @@ test('falls back to title hints when publication types are missing', () => {
 
 test('early rungs prefer reviews and late rungs prefer trials', () => {
   const review = makePaper({ id: 'r', publicationTypes: ['Review'], year: 2024 });
-  const trial = makePaper({ id: 't', publicationTypes: ['Randomized Controlled Trial'], year: 2024 });
+  const trial = makePaper({
+    id: 't',
+    publicationTypes: ['Randomized Controlled Trial'],
+    year: 2024,
+  });
 
   const orientation = rankPapers([review, trial], { rung: 'orientation', now: NOW });
   assert.equal(orientation[0]?.paper.id, 'r', 'orientation should lead with the review');
@@ -39,15 +54,28 @@ test('early rungs prefer reviews and late rungs prefer trials', () => {
 });
 
 test('recency dominates on the frontier rung', () => {
-  const old = makePaper({ id: 'old', publicationTypes: ['Randomized Controlled Trial'], year: 2010 });
-  const fresh = makePaper({ id: 'fresh', publicationTypes: ['Randomized Controlled Trial'], year: 2025 });
+  const old = makePaper({
+    id: 'old',
+    publicationTypes: ['Randomized Controlled Trial'],
+    year: 2010,
+  });
+  const fresh = makePaper({
+    id: 'fresh',
+    publicationTypes: ['Randomized Controlled Trial'],
+    year: 2025,
+  });
   const ranked = rankPapers([old, fresh], { rung: 'frontier', now: NOW });
   assert.equal(ranked[0]?.paper.id, 'fresh');
 });
 
 test('every score carries reasons and stays inside 0..1', () => {
   const scored = scorePaper(
-    makePaper({ publicationTypes: ['Practice Guideline'], year: 2025, openAccessUrl: 'https://x', abstract: 'a'.repeat(60) }),
+    makePaper({
+      publicationTypes: ['Practice Guideline'],
+      year: 2025,
+      openAccessUrl: 'https://x',
+      abstract: 'a'.repeat(60),
+    }),
     { rung: 'applied', now: NOW },
   );
   assert.ok(scored.score > 0 && scored.score <= 1);

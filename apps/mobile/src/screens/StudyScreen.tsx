@@ -26,7 +26,11 @@ export function StudyScreen({ topicId, onBack }: { topicId: string; onBack: () =
 
   const queue = useMemo(() => {
     const ids = new Set(topicCards.map((card) => card.id));
-    return dueQueue(database.reviews.filter((state) => ids.has(state.cardId)), new Date(), 20);
+    return dueQueue(
+      database.reviews.filter((state) => ids.has(state.cardId)),
+      new Date(),
+      20,
+    );
   }, [database.reviews, topicCards]);
 
   const current = queue[0];

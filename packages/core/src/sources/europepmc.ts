@@ -85,10 +85,17 @@ function toPaper(result: EuropePmcResult): Paper | null {
     externalId,
     title,
     authors: result.authorString
-      ? result.authorString.replace(/\.$/, '').split(',').map((a) => a.trim()).filter(Boolean)
+      ? result.authorString
+          .replace(/\.$/, '')
+          .split(',')
+          .map((a) => a.trim())
+          .filter(Boolean)
       : [],
     publicationTypes: result.pubType
-      ? result.pubType.split(';').map((t) => t.trim()).filter(Boolean)
+      ? result.pubType
+          .split(';')
+          .map((t) => t.trim())
+          .filter(Boolean)
       : [],
     meshTerms: (result.meshHeadingList?.meshHeading ?? [])
       .map((heading) => heading.descriptorName ?? '')
@@ -112,7 +119,8 @@ function toPaper(result: EuropePmcResult): Paper | null {
 
 function pickOpenAccessUrl(result: EuropePmcResult): string | undefined {
   const links = result.fullTextUrlList?.fullTextUrl ?? [];
-  const free = links.find((link) => link.availability === 'Open access') ??
+  const free =
+    links.find((link) => link.availability === 'Open access') ??
     links.find((link) => link.availability === 'Free');
   if (free?.url) return free.url;
   if (result.isOpenAccess === 'Y' && result.pmcid) {

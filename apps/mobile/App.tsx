@@ -9,6 +9,7 @@ import { TopicScreen } from './src/screens/TopicScreen';
 import { TopicsScreen } from './src/screens/TopicsScreen';
 import { AppStateProvider, useAppState } from './src/store/AppState';
 import { Body, Button, Card, Heading, Muted } from './src/ui/components';
+import { STANDING_DISCLAIMER } from './src/config';
 import { currentTheme, spacing } from './src/ui/theme';
 
 const theme = currentTheme();
@@ -105,6 +106,10 @@ function Shell() {
       {route.name === 'settings' ? (
         <SettingsScreen onBack={() => setRoute({ name: 'topics' })} />
       ) : null}
+
+      <View style={styles.disclaimerBar}>
+        <Text style={styles.disclaimerText}>{STANDING_DISCLAIMER}</Text>
+      </View>
     </View>
   );
 }
@@ -135,4 +140,12 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
   },
   brand: { color: theme.text, fontSize: 17, fontWeight: '700' },
+  disclaimerBar: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.border,
+    backgroundColor: theme.surface,
+  },
+  disclaimerText: { color: theme.muted, fontSize: 11, textAlign: 'center' },
 });

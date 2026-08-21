@@ -33,7 +33,10 @@ export interface QueryContext {
 
 /** Quote a phrase and strip characters that would break PubMed's parser. */
 export function quoteTerm(value: string): string {
-  const cleaned = value.replace(/["[\]()]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleaned = value
+    .replace(/["[\]()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   return cleaned.includes(' ') ? `"${cleaned}"` : cleaned;
 }
 
@@ -67,7 +70,8 @@ export function planForRung(rung: RungId, context: QueryContext): QueryPlan {
         term: `${topic} AND (review[Publication Type] OR "overview"[Title])`,
         fromYear: currentYear - 8,
         limit: 8,
-        explanation: 'Recent overviews and review articles to get the vocabulary and the shape of the field.',
+        explanation:
+          'Recent overviews and review articles to get the vocabulary and the shape of the field.',
       };
 
     case 'foundations':

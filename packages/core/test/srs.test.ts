@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cardStrength, dueQueue, initialReviewState, isDue, review, rungMastery } from '../src/srs.js';
+import {
+  cardStrength,
+  dueQueue,
+  initialReviewState,
+  isDue,
+  review,
+  rungMastery,
+} from '../src/srs.js';
 import type { ReviewState, RungId } from '../src/types.js';
 
 const START = new Date('2026-01-01T09:00:00Z');
@@ -58,10 +65,16 @@ test('the due queue is longest-overdue first, with unseen cards last', () => {
     repetitions: 1,
   };
   const unseen = initialReviewState('unseen', START);
-  const notYetDue: ReviewState = { ...initialReviewState('later', START), dueAt: day(5).toISOString() };
+  const notYetDue: ReviewState = {
+    ...initialReviewState('later', START),
+    dueAt: day(5).toISOString(),
+  };
 
   const queue = dueQueue([notYetDue, unseen, overdueRecent, overdueOld], START, 10);
-  assert.deepEqual(queue.map((state) => state.cardId), ['old', 'recent', 'unseen']);
+  assert.deepEqual(
+    queue.map((state) => state.cardId),
+    ['old', 'recent', 'unseen'],
+  );
 });
 
 test('the due queue respects its limit', () => {
@@ -89,6 +102,13 @@ test('rung mastery counts unseen cards as zero and saturates with interval', () 
   const states = new Map<string, ReviewState>([['card-a', mature]]);
 
   const mastery = rungMastery(cards, conceptRungs, states, 'foundations');
-  assert.ok(mastery > 0.4 && mastery < 0.6, `one of two cards mature should be ~0.5, got ${mastery}`);
-  assert.equal(rungMastery(cards, conceptRungs, states, 'orientation'), 0, 'no cards means no mastery');
+  assert.ok(
+    mastery > 0.4 && mastery < 0.6,
+    `one of two cards mature should be ~0.5, got ${mastery}`,
+  );
+  assert.equal(
+    rungMastery(cards, conceptRungs, states, 'orientation'),
+    0,
+    'no cards means no mastery',
+  );
 });

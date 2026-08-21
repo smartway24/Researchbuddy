@@ -93,13 +93,18 @@ test('an unstructured abstract with no numbers still yields a card', async () =>
 });
 
 test('a cloze falls back to a named term when there is no number', () => {
-  const cloze = makeCloze('Referral to an experienced centre determines outcome in Severe Respiratory Failure.');
+  const cloze = makeCloze(
+    'Referral to an experienced centre determines outcome in Severe Respiratory Failure.',
+  );
   assert.equal(cloze?.back, 'Severe Respiratory Failure');
   assert.match(cloze?.front ?? '', /_____/);
 });
 
 test('a sentence with nothing specific in it is skipped, not made into a vague card', () => {
-  assert.equal(makeCloze('This has been discussed at length elsewhere in the wider literature.'), null);
+  assert.equal(
+    makeCloze('This has been discussed at length elsewhere in the wider literature.'),
+    null,
+  );
 });
 
 test('an over-long sentence is not turned into a card', () => {

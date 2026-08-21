@@ -8,10 +8,32 @@ import type { EvidenceLevel, Paper, RungId, ScoredPaper } from './types.js';
 
 /** Ordered strongest-first; the first pattern that matches wins. */
 const EVIDENCE_PATTERNS: { level: EvidenceLevel; patterns: RegExp[] }[] = [
-  { level: 'guideline', patterns: [/practice guideline/i, /^guideline$/i, /consensus statement/i, /^guidelines?\b/i] },
-  { level: 'systematic-review', patterns: [/meta-analysis/i, /systematic review/i, /scoping review/i] },
-  { level: 'rct', patterns: [/randomized controlled trial/i, /randomised controlled trial/i, /^clinical trial(, phase (iii|iv))?$/i] },
-  { level: 'cohort', patterns: [/observational study/i, /cohort/i, /comparative study/i, /multicenter study/i, /registry/i] },
+  {
+    level: 'guideline',
+    patterns: [/practice guideline/i, /^guideline$/i, /consensus statement/i, /^guidelines?\b/i],
+  },
+  {
+    level: 'systematic-review',
+    patterns: [/meta-analysis/i, /systematic review/i, /scoping review/i],
+  },
+  {
+    level: 'rct',
+    patterns: [
+      /randomized controlled trial/i,
+      /randomised controlled trial/i,
+      /^clinical trial(, phase (iii|iv))?$/i,
+    ],
+  },
+  {
+    level: 'cohort',
+    patterns: [
+      /observational study/i,
+      /cohort/i,
+      /comparative study/i,
+      /multicenter study/i,
+      /registry/i,
+    ],
+  },
   { level: 'case-series', patterns: [/case reports?/i, /case series/i] },
   { level: 'narrative-review', patterns: [/^review$/i, /editorial/i, /comment/i] },
   { level: 'preclinical', patterns: [/animal/i, /in vitro/i, /preclinical/i] },
@@ -54,12 +76,52 @@ const EVIDENCE_WEIGHTS: Record<EvidenceLevel, number> = {
  * invert that.
  */
 const RUNG_PREFERENCE: Record<RungId, Partial<Record<EvidenceLevel, number>>> = {
-  orientation: { 'narrative-review': 1, 'systematic-review': 0.9, guideline: 0.8, rct: 0.4, 'case-series': 0.2, preclinical: 0.2 },
-  foundations: { 'narrative-review': 1, 'systematic-review': 0.85, preclinical: 0.6, rct: 0.4, 'case-series': 0.2 },
-  mechanism: { 'narrative-review': 0.9, preclinical: 0.9, 'systematic-review': 0.8, cohort: 0.6, 'case-series': 0.3 },
-  applied: { guideline: 1, 'systematic-review': 0.9, 'narrative-review': 0.8, rct: 0.8, cohort: 0.7, preclinical: 0.2 },
-  evidence: { 'systematic-review': 1, rct: 1, guideline: 0.9, cohort: 0.6, 'narrative-review': 0.4, preclinical: 0.1 },
-  frontier: { rct: 1, 'systematic-review': 0.85, cohort: 0.8, preclinical: 0.6, 'narrative-review': 0.5, 'case-series': 0.4 },
+  orientation: {
+    'narrative-review': 1,
+    'systematic-review': 0.9,
+    guideline: 0.8,
+    rct: 0.4,
+    'case-series': 0.2,
+    preclinical: 0.2,
+  },
+  foundations: {
+    'narrative-review': 1,
+    'systematic-review': 0.85,
+    preclinical: 0.6,
+    rct: 0.4,
+    'case-series': 0.2,
+  },
+  mechanism: {
+    'narrative-review': 0.9,
+    preclinical: 0.9,
+    'systematic-review': 0.8,
+    cohort: 0.6,
+    'case-series': 0.3,
+  },
+  applied: {
+    guideline: 1,
+    'systematic-review': 0.9,
+    'narrative-review': 0.8,
+    rct: 0.8,
+    cohort: 0.7,
+    preclinical: 0.2,
+  },
+  evidence: {
+    'systematic-review': 1,
+    rct: 1,
+    guideline: 0.9,
+    cohort: 0.6,
+    'narrative-review': 0.4,
+    preclinical: 0.1,
+  },
+  frontier: {
+    rct: 1,
+    'systematic-review': 0.85,
+    cohort: 0.8,
+    preclinical: 0.6,
+    'narrative-review': 0.5,
+    'case-series': 0.4,
+  },
 };
 
 export interface ScoreOptions {
@@ -93,7 +155,9 @@ export function scorePaper(paper: Paper, options: ScoreOptions): ScoredPaper {
   const age = paperAgeYears(paper, now);
   const recency = age === null ? 0.5 : Math.pow(0.5, age / halfLife);
   if (age !== null) {
-    reasons.push(age < 2 ? 'Published in the last two years' : `About ${Math.round(age)} years old`);
+    reasons.push(
+      age < 2 ? 'Published in the last two years' : `About ${Math.round(age)} years old`,
+    );
   }
 
   const fit = topicalFit(paper, options.focusTerms ?? []);
@@ -135,24 +199,34 @@ export function topicalFit(paper: Paper, focusTerms: string[]): number {
 }
 
 export function paperAgeYears(paper: Paper, now: Date = new Date()): number | null {
-  const year = paper.year ?? (paper.publishedAt ? Number.parseInt(paper.publishedAt.slice(0, 4), 10) : NaN);
+  const year =
+    paper.year ?? (paper.publishedAt ? Number.parseInt(paper.publishedAt.slice(0, 4), 10) : NaN);
   if (!year || Number.isNaN(year)) return null;
-  const published = paper.publishedAt && paper.publishedAt.length >= 7
-    ? new Date(`${paper.publishedAt.slice(0, 7)}-01T00:00:00Z`)
-    : new Date(Date.UTC(year, 6, 1));
+  const published =
+    paper.publishedAt && paper.publishedAt.length >= 7
+      ? new Date(`${paper.publishedAt.slice(0, 7)}-01T00:00:00Z`)
+      : new Date(Date.UTC(year, 6, 1));
   return Math.max(0, (now.getTime() - published.getTime()) / (365.25 * 86_400_000));
 }
 
 export function evidenceLabel(level: EvidenceLevel): string {
   switch (level) {
-    case 'guideline': return 'Guideline';
-    case 'systematic-review': return 'Systematic review / meta-analysis';
-    case 'rct': return 'Randomised trial';
-    case 'cohort': return 'Observational study';
-    case 'case-series': return 'Case report or series';
-    case 'narrative-review': return 'Narrative review';
-    case 'preclinical': return 'Preclinical study';
-    case 'other': return 'Uncategorised';
+    case 'guideline':
+      return 'Guideline';
+    case 'systematic-review':
+      return 'Systematic review / meta-analysis';
+    case 'rct':
+      return 'Randomised trial';
+    case 'cohort':
+      return 'Observational study';
+    case 'case-series':
+      return 'Case report or series';
+    case 'narrative-review':
+      return 'Narrative review';
+    case 'preclinical':
+      return 'Preclinical study';
+    case 'other':
+      return 'Uncategorised';
   }
 }
 

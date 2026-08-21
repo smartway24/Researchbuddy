@@ -76,7 +76,10 @@ export async function httpGetJson<T>(url: string, options: HttpOptions = {}): Pr
   return JSON.parse(body) as T;
 }
 
-export function buildUrl(base: string, params: Record<string, string | number | undefined>): string {
+export function buildUrl(
+  base: string,
+  params: Record<string, string | number | undefined>,
+): string {
   const url = new URL(base);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') url.searchParams.set(key, String(value));

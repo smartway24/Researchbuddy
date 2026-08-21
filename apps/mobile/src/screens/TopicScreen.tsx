@@ -1,7 +1,16 @@
 import { LADDER, dueQueue, getRung, type RungId } from '@researchbuddy/core';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useAppState } from '../store/AppState';
-import { Body, Button, Card, Heading, Muted, Pill, ProgressBar, Subheading } from '../ui/components';
+import {
+  Body,
+  Button,
+  Card,
+  Heading,
+  Muted,
+  Pill,
+  ProgressBar,
+  Subheading,
+} from '../ui/components';
 import { spacing } from '../ui/theme';
 
 export function TopicScreen({
@@ -95,7 +104,11 @@ export function TopicScreen({
             </Muted>
             {unlocked ? (
               <View style={styles.rungAction}>
-                <Button label="Read at this level" variant="secondary" onPress={() => onRead(rung.id)} />
+                <Button
+                  label="Read at this level"
+                  variant="secondary"
+                  onPress={() => onRead(rung.id)}
+                />
               </View>
             ) : null}
           </Card>

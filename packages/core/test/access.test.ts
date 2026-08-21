@@ -44,7 +44,10 @@ test('OpenAthens libraries work the same way', () => {
   };
   const link = proxyUrl('https://doi.org/10.1/x', athens);
   assert.equal(link?.method, 'openathens');
-  assert.match(link?.url ?? '', /^https:\/\/go\.openathens\.net\/redirector\/example\.nhs\.uk\?url=https%3A/);
+  assert.match(
+    link?.url ?? '',
+    /^https:\/\/go\.openathens\.net\/redirector\/example\.nhs\.uk\?url=https%3A/,
+  );
 });
 
 test('a library with no proxy configured produces no proxied link', () => {
@@ -52,21 +55,33 @@ test('a library with no proxy configured produces no proxied link', () => {
 });
 
 test('canonical url prefers the DOI and normalises an already-resolved one', () => {
-  assert.equal(canonicalUrl(makePaper({ doi: '10.1/x', url: 'https://p' })), 'https://doi.org/10.1/x');
-  assert.equal(canonicalUrl(makePaper({ doi: 'https://doi.org/10.1/x' })), 'https://doi.org/10.1/x');
+  assert.equal(
+    canonicalUrl(makePaper({ doi: '10.1/x', url: 'https://p' })),
+    'https://doi.org/10.1/x',
+  );
+  assert.equal(
+    canonicalUrl(makePaper({ doi: 'https://doi.org/10.1/x' })),
+    'https://doi.org/10.1/x',
+  );
   assert.equal(canonicalUrl(makePaper({ url: 'https://p' })), 'https://p');
 });
 
 test('institution setup is validated before it can produce dead links', () => {
   assert.deepEqual(validateInstitution(library), []);
-  assert.ok(validateInstitution({ name: 'X' }).some((problem) => /EZproxy|OpenAthens/.test(problem)));
   assert.ok(
-    validateInstitution({ name: 'X', ezproxyPrefix: 'http://login.example.edu/login?url=' })
-      .some((problem) => /https/.test(problem)),
+    validateInstitution({ name: 'X' }).some((problem) => /EZproxy|OpenAthens/.test(problem)),
   );
   assert.ok(
-    validateInstitution({ name: 'X', ezproxyPrefix: 'https://login.example.edu/login' })
-      .some((problem) => /url=/.test(problem)),
+    validateInstitution({ name: 'X', ezproxyPrefix: 'http://login.example.edu/login?url=' }).some(
+      (problem) => /https/.test(problem),
+    ),
   );
-  assert.ok(validateInstitution({ ezproxyPrefix: library.ezproxyPrefix }).some((p) => /name/i.test(p)));
+  assert.ok(
+    validateInstitution({ name: 'X', ezproxyPrefix: 'https://login.example.edu/login' }).some(
+      (problem) => /url=/.test(problem),
+    ),
+  );
+  assert.ok(
+    validateInstitution({ ezproxyPrefix: library.ezproxyPrefix }).some((p) => /name/i.test(p)),
+  );
 });

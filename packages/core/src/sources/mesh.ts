@@ -71,7 +71,8 @@ export function parseMeshSummary(summary: MeshSummaryResponse, uid: string): Res
   const descriptor = terms[0];
   if (!descriptor) return null;
 
-  const definition = typeof record['ds_scopenote'] === 'string' ? record['ds_scopenote'].trim() : '';
+  const definition =
+    typeof record['ds_scopenote'] === 'string' ? record['ds_scopenote'].trim() : '';
   const year = typeof record['ds_yearintroduced'] === 'string' ? record['ds_yearintroduced'] : '';
 
   return {

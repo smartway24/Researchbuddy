@@ -140,11 +140,12 @@ function rationaleFor(papers: ScoredPaper[], rung: RungId): string {
   if (papers.length === 0) return getRung(rung).goal;
   const levels = new Set(papers.map((scored) => evidenceLabel(scored.evidenceLevel)));
   const years = papers.map((scored) => scored.paper.year).filter((y): y is number => Boolean(y));
-  const span = years.length > 0
-    ? years.length === 1 || Math.min(...years) === Math.max(...years)
-      ? ` from ${years[0]}`
-      : ` from ${Math.min(...years)}–${Math.max(...years)}`
-    : '';
+  const span =
+    years.length > 0
+      ? years.length === 1 || Math.min(...years) === Math.max(...years)
+        ? ` from ${years[0]}`
+        : ` from ${Math.min(...years)}–${Math.max(...years)}`
+      : '';
   return `${papers.length} paper${papers.length === 1 ? '' : 's'}${span} — ${[...levels]
     .slice(0, 2)
     .join(', ')

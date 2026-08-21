@@ -35,10 +35,17 @@ test('surfaces real neighbouring concepts from MeSH indexing', () => {
 
 test('a descriptor present in every paper is too generic to be a concept', () => {
   const uniform = [1, 2, 3].map((n) =>
-    makePaper({ id: `p${n}`, externalId: String(n), meshTerms: ['Ubiquitous Term', `Specific ${n}`] }),
+    makePaper({
+      id: `p${n}`,
+      externalId: String(n),
+      meshTerms: ['Ubiquitous Term', `Specific ${n}`],
+    }),
   );
   const concepts = extractRelatedConcepts(uniform, { maxPrevalence: 0.8, minPaperCount: 1 });
-  assert.equal(concepts.some((concept) => concept.label === 'Ubiquitous Term'), false);
+  assert.equal(
+    concepts.some((concept) => concept.label === 'Ubiquitous Term'),
+    false,
+  );
 });
 
 test('clustering assigns each paper to at most one theme', () => {

@@ -27,7 +27,10 @@ test('PubMed returns parsed papers for a real query', options, async () => {
 });
 
 test('Europe PMC returns parsed papers for a real query', options, async () => {
-  const result = await new EuropePmcSource().search({ term: 'extracorporeal membrane oxygenation', limit: 5 });
+  const result = await new EuropePmcSource().search({
+    term: 'extracorporeal membrane oxygenation',
+    limit: 5,
+  });
   assert.ok(result.papers.length > 0);
   assert.ok(result.papers.some((paper) => paper.abstract));
 });

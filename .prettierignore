@@ -1,0 +1,7 @@
+dist/
+dist-test/
+.expo/
+node_modules/
+package-lock.json
+apps/mobile/assets/
+packages/core/test/fixtures/

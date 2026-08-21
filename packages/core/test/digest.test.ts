@@ -2,8 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { assembleDigest, estimatedMinutes } from '../src/digest.js';
 import { parsePubmedXml } from '../src/sources/pubmed.js';
-import { makePaper } from './helpers.js';
-import { fixture } from './helpers.js';
+import { fixture, makePaper } from './helpers.js';
 
 const NOW = new Date('2026-06-01T00:00:00Z');
 const papers = parsePubmedXml(fixture('pubmed-ecmo.xml'));
@@ -38,7 +37,11 @@ test('papers already read are excluded', () => {
   const seen = new Set([papers[0]!.id]);
   const digest = assembleDigest(papers, { ...base, seenPaperIds: seen });
   assert.equal(digest.readingOrder.includes(papers[0]!.id), false);
-  assert.equal(digest.candidateCount, papers.length, 'candidate count still reports what was considered');
+  assert.equal(
+    digest.candidateCount,
+    papers.length,
+    'candidate count still reports what was considered',
+  );
 });
 
 test('the digest is capped so a session stays finishable', () => {

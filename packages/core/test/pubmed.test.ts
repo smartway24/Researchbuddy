@@ -45,7 +45,10 @@ test('captures publication types and MeSH indexing', () => {
 test('links PMC full text when the record has a PMC id', () => {
   for (const paper of papers) {
     if (paper.pmcid) {
-      assert.equal(paper.openAccessUrl, `https://www.ncbi.nlm.nih.gov/pmc/articles/${paper.pmcid}/`);
+      assert.equal(
+        paper.openAccessUrl,
+        `https://www.ncbi.nlm.nih.gov/pmc/articles/${paper.pmcid}/`,
+      );
     } else {
       assert.equal(paper.openAccessUrl, undefined);
     }
