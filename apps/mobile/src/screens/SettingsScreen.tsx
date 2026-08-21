@@ -1,6 +1,7 @@
 import { validateInstitution, type Institution } from '@researchbuddy/core';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
+import { searchCache } from '../store/cache';
 import { exportDatabase } from '../store/db';
 import { useAppState } from '../store/AppState';
 import { clearAnthropicKey, getAnthropicKey, setAnthropicKey } from '../store/keys';
@@ -18,6 +19,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [libraryName, setLibraryName] = useState('');
   const [libraryPrefix, setLibraryPrefix] = useState('');
   const [ncbiKey, setNcbiKey] = useState(settings.ncbiApiKey ?? '');
+  const [cacheCleared, setCacheCleared] = useState(false);
 
   useEffect(() => {
     void getAnthropicKey().then((stored) => setKeyPresent(Boolean(stored)));
@@ -173,7 +175,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       <Card>
         <Subheading>Your data</Subheading>
         <Muted>
-          Everything is stored on this device. Export a copy whenever you want — it is plain JSON.
+          Researchbuddy has no server and no account. Your topics, cards, and review history
+          live on this device; searches are cached here too, which is what lets a reading list
+          open with no signal. Export a copy whenever you want — it is plain JSON.
         </Muted>
         <Button
           label="Export"
@@ -182,6 +186,16 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             void Share.share({ message: exportDatabase(database) });
           }}
         />
+        <View style={styles.rowActions}>
+          <Button
+            label={cacheCleared ? 'Cached searches cleared' : 'Clear cached searches'}
+            variant="secondary"
+            disabled={cacheCleared}
+            onPress={() => {
+              void searchCache.clear().then(() => setCacheCleared(true));
+            }}
+          />
+        </View>
       </Card>
 
       <Button label="Back" variant="secondary" onPress={onBack} />

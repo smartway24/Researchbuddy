@@ -168,6 +168,18 @@ export interface Digest {
   readingOrder: string[];
   /** Total papers considered before filtering, for transparency. */
   candidateCount: number;
+  /**
+   * What each source contributed. Present when the digest came from
+   * `buildDigest`; it is how the UI knows a list was served from the
+   * on-device cache, and how old that copy is.
+   */
+  sourceStatus?: {
+    sourceId: string;
+    count: number;
+    error?: string;
+    fromCache?: boolean;
+    savedAt?: string;
+  }[];
 }
 
 /** Per-topic progress, driving unlocks and the size of each digest. */

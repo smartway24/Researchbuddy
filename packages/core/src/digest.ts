@@ -36,7 +36,34 @@ export async function buildDigest(options: BuildDigestOptions): Promise<Digest> 
   if (options.signal) query.signal = options.signal;
 
   const federated = await searchAll(options.sources, query);
-  return assembleDigest(federated.papers, options);
+  return { ...assembleDigest(federated.papers, options), sourceStatus: federated.bySource };
+}
+
+/**
+ * How much of this digest came off the device rather than the network, and
+ * how old that copy is. The UI uses it to say "saved yesterday" instead of
+ * quietly presenting stale results as current.
+ */
+export function digestFreshness(digest: Digest): {
+  live: boolean;
+  cached: boolean;
+  /** Oldest cached copy contributing to the digest. */
+  savedAt?: string;
+  failedSources: string[];
+} {
+  const status = digest.sourceStatus ?? [];
+  const cachedEntries = status.filter((entry) => entry.fromCache);
+  const savedTimes = cachedEntries
+    .map((entry) => entry.savedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+
+  return {
+    live: status.some((entry) => !entry.fromCache && !entry.error),
+    cached: cachedEntries.length > 0,
+    ...(savedTimes[0] ? { savedAt: savedTimes[0] } : {}),
+    failedSources: status.filter((entry) => entry.error).map((entry) => entry.sourceId),
+  };
 }
 
 /**

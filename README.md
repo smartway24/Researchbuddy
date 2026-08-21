@@ -39,6 +39,25 @@ the rung you are on, grouped into themes, and put in reading order. Every paper 
 with SM-2. Mastery per rung is the mean retention strength of that rung's cards, and
 mastery is what unlocks the next rung.
 
+## No server
+
+There is no backend, and there is nothing to deploy, operate, or pay for. No
+accounts, no sign-in, no telemetry, no analytics SDK. The only hosts the app ever
+contacts are NCBI, Europe PMC, and — if you turn it on with your own key — the
+Anthropic API. It talks to them directly from the device.
+
+The two things that usually force a project like this to grow a server are rate
+limits and offline reading. Both are handled on the device instead: searches are
+cached locally, so a repeat search costs no request and stays inside PubMed's
+limits, and when the network is gone a stale copy is served rather than an error.
+Because ranking, theming, and scheduling are pure functions over cached papers, a
+cached search is enough to rebuild an entire reading list with no signal — verified
+by cutting the network and reloading the app from scratch: the full themed list
+comes back, labelled with how old it is, with zero requests.
+
+Your topics, cards, and review history never leave the device. Settings exports the
+lot as plain JSON.
+
 ## What is here
 
 ```
@@ -57,6 +76,7 @@ apps/mobile/      Expo / React Native app, built for the iOS App Store.
 | `concepts.ts` | Concept neighbourhood and theming from MeSH co-occurrence |
 | `digest.ts` | Retrieved papers → a themed, ordered reading list |
 | `sources/` | PubMed, Europe PMC, MeSH lookup, institutional access, dedupe |
+| `cache.ts` | On-device TTL cache and source wrapper; what replaces a backend |
 | `ai/` | Optional model layer, with an extractive on-device default |
 
 ## Data sources
@@ -102,7 +122,7 @@ nothing.
 ```bash
 npm install
 npm run build            # build @researchbuddy/core
-npm test                 # 81 tests, all offline against fixtures
+npm test                 # 91 tests, all offline against fixtures
 npm run test:live -w @researchbuddy/core   # also hits the real PubMed / Europe PMC APIs
 
 cd apps/mobile
@@ -122,4 +142,6 @@ which needs an Apple Developer account and a Mac or EAS's build servers.
 - **Concept prerequisites across topics.** Concepts carry a `prerequisites` field
   and are ordered topologically, but nothing yet links a concept in one topic to
   its foundation in another.
-- **Sync and backup.** Everything is local; Settings exports plain JSON.
+- **Sync and backup.** Everything is local; Settings exports plain JSON. Any
+  future sync should stay serverless — a file in the user's own iCloud Drive,
+  not a service.

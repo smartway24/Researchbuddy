@@ -17,6 +17,10 @@ export interface SearchResult {
   total: number;
   /** The query string actually sent, kept for the "why am I seeing this" view. */
   executedQuery: string;
+  /** True when this came from the on-device cache rather than the network. */
+  fromCache?: boolean;
+  /** When the cached copy was fetched, so the UI can say how old it is. */
+  savedAt?: string;
 }
 
 export interface SourceAdapter {

@@ -5,6 +5,16 @@ export * from './query.js';
 export * from './rank.js';
 export * from './concepts.js';
 export * from './digest.js';
+export {
+  Cache,
+  CachingSource,
+  MemoryStore,
+  searchCacheKey,
+  withCache,
+  type CacheEntry,
+  type CacheOptions,
+  type KeyValueStore,
+} from './cache.js';
 export * from './ai/index.js';
 export * from './sources/types.js';
 export { PubMedSource, parsePubmedXml, type PubMedOptions } from './sources/pubmed.js';

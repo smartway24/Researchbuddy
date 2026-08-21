@@ -2,6 +2,7 @@ import {
   OfflineProvider,
   accessLinks,
   buildDigest,
+  digestFreshness,
   estimatedMinutes,
   evidenceLabel,
   extractRelatedConcepts,
@@ -218,6 +219,24 @@ export function DigestScreen({
             {`${digest.readingOrder.length} of ${digest.candidateCount} papers kept · about ${estimatedMinutes(digest)} min`}
           </Muted>
 
+          {(() => {
+            const freshness = digestFreshness(digest);
+            if (!freshness.cached && freshness.failedSources.length === 0) return null;
+            return (
+              <Card>
+                <Subheading>{freshness.live ? 'Partly from your device' : 'Saved copy'}</Subheading>
+                <Muted>
+                  {freshness.savedAt
+                    ? `Showing results saved ${describeAge(freshness.savedAt)}. They will refresh next time you are online.`
+                    : 'Some sources could not be reached.'}
+                </Muted>
+                {freshness.failedSources.length > 0 ? (
+                  <Muted>{`Could not reach: ${freshness.failedSources.join(', ')}`}</Muted>
+                ) : null}
+              </Card>
+            );
+          })()}
+
           {relatedConcepts.length > 0 ? (
             <Card>
               <Subheading>Around this topic</Subheading>
@@ -284,6 +303,16 @@ export function DigestScreen({
       </View>
     </ScrollView>
   );
+}
+
+/** "3 days ago" beats an ISO timestamp when the point is "is this current?". */
+function describeAge(savedAt: string): string {
+  const ageMs = Date.now() - new Date(savedAt).getTime();
+  const hours = Math.floor(ageMs / 3_600_000);
+  if (hours < 1) return 'in the last hour';
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
 const styles = StyleSheet.create({

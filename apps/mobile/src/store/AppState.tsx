@@ -6,6 +6,7 @@ import {
   resolveMeshTopic,
   review as applyReview,
   rungMastery,
+  withCache,
   type Card,
   type Concept,
   type ReviewGrade,
@@ -24,6 +25,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { searchCache } from './cache';
 import { emptyDatabase, loadDatabase, saveDatabase, type Database, type Settings } from './db';
 
 interface AppStateValue {
@@ -210,12 +212,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setDatabase((previous) => ({ ...previous, settings: { ...previous.settings, ...patch } }));
   }, []);
 
+  // Sources are wrapped in the on-device cache: no backend, and a reading
+  // list still opens on a plane.
   const sources = useCallback(
     () =>
-      defaultSources(
-        database.settings.ncbiApiKey
-          ? { pubmed: { apiKey: database.settings.ncbiApiKey, tool: 'researchbuddy' } }
-          : {},
+      withCache(
+        defaultSources(
+          database.settings.ncbiApiKey
+            ? { pubmed: { apiKey: database.settings.ncbiApiKey, tool: 'researchbuddy' } }
+            : {},
+        ),
+        searchCache,
       ),
     [database.settings.ncbiApiKey],
   );

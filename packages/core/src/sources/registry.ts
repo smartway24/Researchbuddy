@@ -16,7 +16,14 @@ export function defaultSources(options: RegistryOptions = {}): SourceAdapter[] {
 export interface FederatedResult {
   papers: Paper[];
   /** Per-source outcome, so a failing source is visible rather than silent. */
-  bySource: { sourceId: string; total: number; count: number; error?: string }[];
+  bySource: {
+    sourceId: string;
+    total: number;
+    count: number;
+    error?: string;
+    fromCache?: boolean;
+    savedAt?: string;
+  }[];
 }
 
 /**
@@ -41,6 +48,8 @@ export async function searchAll(
         sourceId: source.id,
         total: outcome.value.total,
         count: outcome.value.papers.length,
+        ...(outcome.value.fromCache ? { fromCache: true } : {}),
+        ...(outcome.value.savedAt ? { savedAt: outcome.value.savedAt } : {}),
       });
     } else {
       bySource.push({
