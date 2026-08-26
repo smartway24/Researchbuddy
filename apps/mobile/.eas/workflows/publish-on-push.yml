@@ -28,9 +28,12 @@ jobs:
         run: npm --prefix ../.. test
 
   publish:
-    name: Publish to the preview channel
+    name: Publish to the channel TestFlight listens on
     needs: [verify]
     type: update
     params:
-      branch: preview
+      # `production` is the channel the TestFlight binary declared at build
+      # time. Publishing anywhere else succeeds, reports success, and reaches
+      # nobody — the exact trap the previous app is sitting in.
+      branch: production
       platform: ios

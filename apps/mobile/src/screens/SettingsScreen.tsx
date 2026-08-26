@@ -4,7 +4,12 @@ import { Alert, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from
 import { searchCache } from '../store/cache';
 import { exportDatabase } from '../store/db';
 import { useAppState } from '../store/AppState';
-import { clearAnthropicKey, getAnthropicKey, setAnthropicKey } from '../store/keys';
+import {
+  clearAnthropicKey,
+  getAnthropicKey,
+  keyStorageIsSecure,
+  setAnthropicKey,
+} from '../store/keys';
 import { Body, Button, Card, Heading, Muted, Pill, Subheading } from '../ui/components';
 import { currentTheme, spacing } from '../ui/theme';
 
@@ -128,7 +133,11 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         </Muted>
         {keyPresent ? (
           <View style={styles.rowActions}>
-            <Muted>A key is stored in your keychain.</Muted>
+            <Muted>
+              {keyStorageIsSecure
+                ? 'A key is stored in your keychain.'
+                : 'A key is stored in this browser. Browsers have no keychain — use the phone app for anything you care about.'}
+            </Muted>
             <Button label="Remove key" variant="secondary" onPress={() => void removeKey()} />
           </View>
         ) : (

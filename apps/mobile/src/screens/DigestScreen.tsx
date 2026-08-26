@@ -14,7 +14,8 @@ import {
   type ScoredPaper,
 } from '@researchbuddy/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useAppState } from '../store/AppState';
 import { Body, Button, Card, Heading, Muted, Pill, Subheading } from '../ui/components';
 import { spacing } from '../ui/theme';
@@ -170,14 +171,14 @@ export function DigestScreen({
         return;
       }
       if (links.length === 1) {
-        await Linking.openURL(first.url);
+        await WebBrowser.openBrowserAsync(first.url);
         return;
       }
       Alert.alert('Open full text', 'Choose how to read this paper.', [
         ...links.slice(0, 3).map((link) => ({
           text: link.requiresLogin ? `${link.label} (login)` : link.label,
           onPress: () => {
-            void Linking.openURL(link.url);
+            void WebBrowser.openBrowserAsync(link.url);
           },
         })),
         { text: 'Cancel', style: 'cancel' as const },
