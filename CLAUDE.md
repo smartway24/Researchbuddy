@@ -56,9 +56,22 @@ The one exception is the root `overrides` entry pinning `react-native`: Expo SDK
 Metro config requires `react-native/rn-get-polyfills`, which RN 0.87 removed. Without
 the pin, npm hoists 0.87 to satisfy peer ranges and every bundle fails.
 
+## Local dev loop
+
+```bash
+cd apps/mobile && npx expo start   # then press i for the iOS Simulator
+npx expo run:ios --device          # a real iPhone over a cable, no TestFlight
+```
+
+The Simulator is the loop to stay in: JS changes reload in seconds. `run:ios`
+regenerates the native `ios/` directory, which is gitignored on purpose — the app
+is fully managed, so `app.json` plus config plugins are the only source of truth
+for native config. Never commit `ios/`.
+
 ## Releasing
 
-Credentials live on EAS, not on disk. No Mac and no Xcode are involved.
+Credentials live on EAS, and builds run on EAS's machines — a Mac is useful for the
+Simulator but is not part of the release path.
 
 ```bash
 npm run verify

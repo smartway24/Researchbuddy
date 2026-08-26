@@ -126,7 +126,8 @@ npm test                 # 91 tests, all offline against fixtures
 npm run test:live -w @researchbuddy/core   # also hits the real PubMed / Europe PMC APIs
 
 cd apps/mobile
-npx expo start           # then scan the QR code with Expo Go
+npx expo start           # press i for the iOS Simulator, or scan the QR with Expo Go
+npx expo run:ios --device  # or straight onto a real iPhone over a cable
 ```
 
 `npm run verify` runs typecheck, lint, and tests together — that is the gate before
@@ -134,7 +135,8 @@ anything is published.
 
 ## Releasing
 
-Credentials live on EAS; no Mac and no Xcode are involved.
+Credentials live on EAS, and builds run on EAS's machines — a Mac is handy for
+the Simulator but is not part of the release path.
 
 ```bash
 npm run verify
