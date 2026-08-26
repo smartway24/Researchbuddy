@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
     "runtimeVersion": {
-      "policy": "fingerprint"
+      "policy": "sdkVersion"
     },
     "ios": {
       "supportsTablet": true,
@@ -78,6 +78,15 @@
       "expo-sqlite",
       "expo-sharing",
       "expo-font"
-    ]
+    ],
+    "owner": "konbuilds",
+    "extra": {
+      "eas": {
+        "projectId": "9b801bfc-17ac-448a-82b0-4e57fea9f4eb"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9b801bfc-17ac-448a-82b0-4e57fea9f4eb"
+    }
   }
 }
