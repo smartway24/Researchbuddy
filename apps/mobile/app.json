@@ -61,8 +61,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store",
-      "expo-status-bar",
       [
         "expo-splash-screen",
         {
@@ -73,11 +71,7 @@
             "backgroundColor": "#0f1b2a"
           }
         }
-      ],
-      "expo-web-browser",
-      "expo-sqlite",
-      "expo-sharing",
-      "expo-font"
+      ]
     ],
     "owner": "konbuilds",
     "extra": {
