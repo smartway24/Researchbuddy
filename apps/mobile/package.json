@@ -8,7 +8,8 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
-    "assets": "node scripts/generate-assets.mjs"
+    "assets": "node scripts/generate-assets.mjs",
+    "eas-build-post-install": "cd ../.. && npm run build"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
