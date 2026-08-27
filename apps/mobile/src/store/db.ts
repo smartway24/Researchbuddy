@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Card, Concept, Institution, ReviewState, Topic } from '@researchbuddy/core';
+import type { Institution, Topic } from '@researchbuddy/core';
 
 /**
- * Local-first storage. Everything the learner accumulates — topics, cards,
- * review history, which papers they have read — lives on the device. There is
- * no account and no server, which is also why there is an export: the data
- * should never be trapped in this app.
+ * Local-first storage. Everything the learner accumulates — topics, and which
+ * papers they have already been shown — lives on the device. There is no
+ * account and no server, which is also why there is an export: the data should
+ * never be trapped in this app.
  */
 
 export interface Settings {
@@ -22,10 +22,7 @@ export interface Settings {
 export interface Database {
   version: 1;
   topics: Topic[];
-  concepts: Concept[];
-  cards: Card[];
-  reviews: ReviewState[];
-  /** Paper ids already delivered in a digest, per topic. */
+  /** Paper ids already delivered in a reading list, per topic. */
   seenPapers: Record<string, string[]>;
   settings: Settings;
 }
@@ -36,9 +33,6 @@ export function emptyDatabase(): Database {
   return {
     version: 1,
     topics: [],
-    concepts: [],
-    cards: [],
-    reviews: [],
     seenPapers: {},
     settings: {
       aiProvider: 'offline',
@@ -55,7 +49,7 @@ export async function loadDatabase(): Promise<Database> {
     if (!raw) return emptyDatabase();
     const parsed = JSON.parse(raw) as Partial<Database>;
     // Merge over the empty shape so a database written by an older build is
-    // still readable after new fields are added.
+    // still readable after fields are added or removed.
     return {
       ...emptyDatabase(),
       ...parsed,
@@ -72,7 +66,7 @@ export async function saveDatabase(database: Database): Promise<void> {
   await AsyncStorage.setItem(KEY, JSON.stringify(database));
 }
 
-/** Portable export — the learner's deck should never be locked in here. */
+/** Portable export — the learner's library should never be locked in here. */
 export function exportDatabase(database: Database): string {
   return JSON.stringify(database, null, 2);
 }

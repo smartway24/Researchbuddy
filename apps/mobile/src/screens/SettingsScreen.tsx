@@ -10,7 +10,7 @@ import {
   keyStorageIsSecure,
   setAnthropicKey,
 } from '../store/keys';
-import { Body, Button, Card, Heading, Muted, Pill, Subheading } from '../ui/components';
+import { Body, Button, Card, Muted, Pill, Subheading } from '../ui/components';
 import { currentTheme, spacing } from '../ui/theme';
 
 const theme = currentTheme();
@@ -75,8 +75,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Heading>Settings</Heading>
-
       <Card>
         <Subheading>Libraries and subscriptions</Subheading>
         <Muted>
@@ -210,8 +208,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           />
         </View>
       </Card>
-
-      <Button label="Back" variant="secondary" onPress={onBack} />
     </ScrollView>
   );
 }

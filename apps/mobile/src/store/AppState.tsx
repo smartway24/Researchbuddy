@@ -1,20 +1,4 @@
-import {
-  computeProgress,
-  defaultSources,
-  emptyMastery,
-  initialReviewState,
-  resolveMeshTopic,
-  review as applyReview,
-  rungMastery,
-  withCache,
-  type Card,
-  type Concept,
-  type ReviewGrade,
-  type ReviewState,
-  type RungId,
-  type Topic,
-  type TopicProgress,
-} from '@researchbuddy/core';
+import { defaultSources, resolveMeshTopic, withCache, type Topic } from '@researchbuddy/core';
 import {
   createContext,
   useCallback,
@@ -32,7 +16,6 @@ import { emptyDatabase, loadDatabase, saveDatabase, type Database, type Settings
 interface AppStateValue {
   ready: boolean;
   database: Database;
-  progressFor(topicId: string): TopicProgress;
   addTopic(input: { label: string; canonicalTerm: string; meshTerm?: string }): Topic;
   /**
    * Look the topic up in MeSH and store the canonical descriptor, NLM's
@@ -41,9 +24,6 @@ interface AppStateValue {
    */
   enrichTopic(topicId: string, term: string): Promise<void>;
   removeTopic(topicId: string): void;
-  addConcepts(concepts: Concept[]): void;
-  addCards(cards: Card[]): void;
-  gradeCard(cardId: string, grade: ReviewGrade): void;
   markPapersSeen(topicId: string, paperIds: string[]): void;
   updateSettings(patch: Partial<Settings>): void;
   sources(): ReturnType<typeof defaultSources>;
@@ -68,8 +48,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Debounced persistence: grading a card should not write the whole store on
-  // every tap during a fast review session.
+  // Debounced persistence: a burst of edits should not rewrite the whole store
+  // on every keystroke.
   useEffect(() => {
     if (!ready) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -80,27 +60,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, [database, ready]);
-
-  const conceptRungs = useMemo(
-    () => new Map(database.concepts.map((concept) => [concept.id, concept.rung])),
-    [database.concepts],
-  );
-  const reviewsByCard = useMemo(
-    () => new Map(database.reviews.map((state) => [state.cardId, state])),
-    [database.reviews],
-  );
-
-  const progressFor = useCallback(
-    (topicId: string): TopicProgress => {
-      const cards = database.cards.filter((card) => card.topicId === topicId);
-      const mastery = emptyMastery();
-      for (const rung of Object.keys(mastery) as RungId[]) {
-        mastery[rung] = rungMastery(cards, conceptRungs, reviewsByCard, rung);
-      }
-      return computeProgress(topicId, mastery);
-    },
-    [database.cards, conceptRungs, reviewsByCard],
-  );
 
   const addTopic: AppStateValue['addTopic'] = useCallback((input) => {
     const now = new Date().toISOString();
@@ -148,57 +107,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const removeTopic: AppStateValue['removeTopic'] = useCallback((topicId) => {
     setDatabase((previous) => {
-      const cardIds = new Set(
-        previous.cards.filter((card) => card.topicId === topicId).map((card) => card.id),
-      );
       const { [topicId]: _removed, ...seenPapers } = previous.seenPapers;
       return {
         ...previous,
         topics: previous.topics.filter((topic) => topic.id !== topicId),
-        concepts: previous.concepts.filter((concept) => concept.topicId !== topicId),
-        cards: previous.cards.filter((card) => card.topicId !== topicId),
-        reviews: previous.reviews.filter((state) => !cardIds.has(state.cardId)),
         seenPapers,
-      };
-    });
-  }, []);
-
-  const addConcepts: AppStateValue['addConcepts'] = useCallback((concepts) => {
-    setDatabase((previous) => {
-      const existing = new Set(previous.concepts.map((concept) => concept.id));
-      return {
-        ...previous,
-        concepts: [
-          ...previous.concepts,
-          ...concepts.filter((concept) => !existing.has(concept.id)),
-        ],
-      };
-    });
-  }, []);
-
-  const addCards: AppStateValue['addCards'] = useCallback((cards) => {
-    setDatabase((previous) => {
-      const existing = new Set(previous.cards.map((card) => card.id));
-      const fresh = cards.filter((card) => !existing.has(card.id));
-      const now = new Date();
-      return {
-        ...previous,
-        cards: [...previous.cards, ...fresh],
-        reviews: [...previous.reviews, ...fresh.map((card) => initialReviewState(card.id, now))],
-      };
-    });
-  }, []);
-
-  const gradeCard: AppStateValue['gradeCard'] = useCallback((cardId, grade) => {
-    setDatabase((previous) => {
-      const now = new Date();
-      const current: ReviewState =
-        previous.reviews.find((state) => state.cardId === cardId) ??
-        initialReviewState(cardId, now);
-      const next = applyReview(current, grade, now);
-      return {
-        ...previous,
-        reviews: [...previous.reviews.filter((state) => state.cardId !== cardId), next],
       };
     });
   }, []);
@@ -238,31 +151,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     () => ({
       ready,
       database,
-      progressFor,
       addTopic,
       enrichTopic,
       removeTopic,
-      addConcepts,
-      addCards,
-      gradeCard,
       markPapersSeen,
       updateSettings,
       sources,
     }),
-    [
-      ready,
-      database,
-      progressFor,
-      addTopic,
-      enrichTopic,
-      removeTopic,
-      addConcepts,
-      addCards,
-      gradeCard,
-      markPapersSeen,
-      updateSettings,
-      sources,
-    ],
+    [ready, database, addTopic, enrichTopic, removeTopic, markPapersSeen, updateSettings, sources],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

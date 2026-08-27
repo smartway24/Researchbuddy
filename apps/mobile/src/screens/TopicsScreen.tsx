@@ -1,14 +1,13 @@
-import { LADDER } from '@researchbuddy/core';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useAppState } from '../store/AppState';
-import { Body, Button, Card, Heading, Muted, ProgressBar, Subheading } from '../ui/components';
+import { Body, Button, Card, Heading, Muted, Subheading } from '../ui/components';
 import { currentTheme, spacing } from '../ui/theme';
 
 const theme = currentTheme();
 
 export function TopicsScreen({ onOpenTopic }: { onOpenTopic: (topicId: string) => void }) {
-  const { database, addTopic, enrichTopic, removeTopic, progressFor } = useAppState();
+  const { database, addTopic, enrichTopic, removeTopic } = useAppState();
   const [draft, setDraft] = useState('');
 
   const create = () => {
@@ -56,36 +55,29 @@ export function TopicsScreen({ onOpenTopic }: { onOpenTopic: (topicId: string) =
         <Card>
           <Subheading>Nothing here yet</Subheading>
           <Muted>
-            Your first topic will start at Orientation. Later rungs unlock as your recall of the
-            earlier ones holds up, so the research feed never arrives before you can read it.
+            Add a topic and Research Buddy resolves it against the medical subject headings, then
+            pulls reading for it at whatever depth you ask for.
           </Muted>
         </Card>
       ) : null}
 
-      {database.topics.map((topic) => {
-        const progress = progressFor(topic.id);
-        const rungsDone = progress.unlockedRungs.length;
-        return (
-          <Pressable
-            key={topic.id}
-            onPress={() => onOpenTopic(topic.id)}
-            onLongPress={() => confirmRemove(topic.id, topic.label)}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${topic.label}`}
-          >
-            <Card>
-              <Subheading>{topic.label}</Subheading>
-              <Body>
-                {LADDER.find((rung) => rung.id === progress.currentRung)?.title ?? 'Orientation'}
-              </Body>
-              <View style={styles.progress}>
-                <ProgressBar value={rungsDone / LADDER.length} />
-              </View>
-              <Muted>{`${rungsDone} of ${LADDER.length} rungs unlocked · long-press to delete`}</Muted>
-            </Card>
-          </Pressable>
-        );
-      })}
+      {database.topics.map((topic) => (
+        <Pressable
+          key={topic.id}
+          onPress={() => onOpenTopic(topic.id)}
+          onLongPress={() => confirmRemove(topic.id, topic.label)}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${topic.label}`}
+        >
+          <Card>
+            <Subheading>{topic.label}</Subheading>
+            {topic.canonicalTerm !== topic.label ? <Body>{topic.canonicalTerm}</Body> : null}
+            <Muted>
+              {`${(database.seenPapers[topic.id] ?? []).length} papers read · long-press to delete`}
+            </Muted>
+          </Card>
+        </Pressable>
+      ))}
     </ScrollView>
   );
 }
@@ -109,5 +101,4 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontSize: 15,
   },
-  progress: { marginVertical: spacing.sm },
 });

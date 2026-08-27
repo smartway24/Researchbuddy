@@ -1,5 +1,4 @@
 import {
-  OfflineProvider,
   accessLinks,
   buildDigest,
   digestFreshness,
@@ -7,11 +6,9 @@ import {
   evidenceLabel,
   extractRelatedConcepts,
   getRung,
-  type AiProvider,
   type Digest,
   type Paper,
   type RungId,
-  type ScoredPaper,
 } from '@researchbuddy/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
@@ -34,7 +31,7 @@ export function DigestScreen({
   rung: RungId;
   onBack: () => void;
 }) {
-  const { database, markPapersSeen, addConcepts, addCards, sources } = useAppState();
+  const { database, markPapersSeen, sources } = useAppState();
   const topic = database.topics.find((candidate) => candidate.id === topicId);
 
   /**
@@ -103,64 +100,6 @@ export function DigestScreen({
   }, [topic, topicId, rung, sources, requestKey, reloadNonce]);
 
   const reload = useCallback(() => setReloadNonce((nonce) => nonce + 1), []);
-
-  const provider: AiProvider = useMemo(() => new OfflineProvider(), []);
-
-  const addCardsFor = useCallback(
-    async (scored: ScoredPaper) => {
-      if (!topic) return;
-      const paper = scored.paper;
-      const conceptId = `concept-${paper.id}`;
-      addConcepts([
-        {
-          id: conceptId,
-          topicId,
-          rung,
-          label: paper.title,
-          summary: paper.abstract?.slice(0, 400) ?? '',
-          prerequisites: [],
-          citations: [
-            {
-              sourceId: paper.sourceId,
-              externalId: paper.externalId,
-              title: paper.title,
-              ...(paper.url ? { url: paper.url } : {}),
-            },
-          ],
-        },
-      ]);
-
-      const drafts = await provider.draftCards(
-        {
-          title: paper.title,
-          body: paper.abstract ?? paper.title,
-          sourceIds: [paper.id],
-          count: 3,
-        },
-        { rung },
-      );
-
-      if (drafts.length === 0) {
-        Alert.alert('No cards made', 'This record has too little text to build cards from.');
-        return;
-      }
-
-      const now = new Date().toISOString();
-      addCards(
-        drafts.map((draft, index) => ({
-          id: `card-${paper.id}-${index}`,
-          conceptId,
-          topicId,
-          front: draft.front,
-          back: draft.back,
-          createdAt: now,
-        })),
-      );
-      markPapersSeen(topicId, [paper.id]);
-      Alert.alert('Added', `${drafts.length} cards added to ${topic.label}.`);
-    },
-    [topic, topicId, rung, provider, addConcepts, addCards, markPapersSeen],
-  );
 
   const openPaper = useCallback(
     async (paper: Paper) => {
@@ -297,11 +236,6 @@ export function DigestScreen({
                   ))}
                   <View style={styles.cardActions}>
                     <Button label="Open" onPress={() => void openPaper(scored.paper)} />
-                    <Button
-                      label="Make cards"
-                      variant="secondary"
-                      onPress={() => void addCardsFor(scored)}
-                    />
                   </View>
                 </Card>
               ))}
@@ -315,10 +249,6 @@ export function DigestScreen({
           />
         </>
       ) : null}
-
-      <View style={styles.back}>
-        <Button label="Back" variant="secondary" onPress={onBack} />
-      </View>
     </ScrollView>
   );
 }
@@ -339,5 +269,4 @@ const styles = StyleSheet.create({
   retry: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginVertical: spacing.sm },
   cardActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  back: { marginTop: spacing.lg },
 });
