@@ -1,17 +1,39 @@
 import type { RungId } from './types.js';
 
 /**
- * Query building is where "remove the searching on my end" actually happens.
+ * Query planning is where "remove the searching on my end" actually happens.
  *
- * The learner types a topic. For each rung of the ladder we know what kind of
- * reading is useful — a review article for foundations, a landmark trial for
- * the evidence rung, the last two years for the frontier — so we express that
- * as filters instead of asking the learner to know PubMed syntax.
+ * A plan is deliberately *not* a query string. Every source speaks its own
+ * language — PubMed wants `review[Publication Type]`, Europe PMC wants
+ * `PUB_TYPE:"review"` — and handing one source another's syntax does not fail
+ * loudly. Europe PMC silently ignores field tags it does not recognise and
+ * returns whatever matched the bare words, sorted by citations, which is how a
+ * search for "PV loop" came back with a meta-analysis about postoperative
+ * nausea. So the planner describes *intent*, and each adapter renders it.
  */
+
+/** What the learner is studying, in every name we know for it. */
+export interface TopicSpec {
+  /** Canonical term — the MeSH descriptor when we resolved one, else what they typed. */
+  term: string;
+  /** MeSH descriptor, when known. */
+  meshTerm?: string;
+  /** MeSH entry terms; catches papers that use another name for the same thing. */
+  synonyms?: string[];
+}
+
+/** Kinds of paper a rung wants, expressed once and translated per source. */
+export type EvidenceFilter = 'review' | 'systematic-review' | 'meta-analysis' | 'rct' | 'guideline';
+
 export interface QueryPlan {
   rung: RungId;
-  /** PubMed-syntax query; Europe PMC accepts the field-free form well enough. */
-  term: string;
+  topic: TopicSpec;
+  /** Any-of. Empty means no restriction on publication type. */
+  publicationTypes: EvidenceFilter[];
+  /** Any-of free text, matched in title or abstract. */
+  anyText: string[];
+  /** Restrict to human studies. */
+  humansOnly: boolean;
   fromYear?: number;
   toYear?: number;
   limit: number;
@@ -19,74 +41,154 @@ export interface QueryPlan {
   explanation: string;
 }
 
-export interface QueryContext {
-  /** Canonical topic term, e.g. "Extracorporeal Membrane Oxygenation". */
-  topic: string;
-  /** MeSH descriptor when known — a MeSH-anchored query is far more precise. */
-  meshTerm?: string;
-  /** MeSH entry terms; searching them catches papers that use another name. */
-  synonyms?: string[];
-  /** Narrowing terms from the concept the learner is on right now. */
-  focusTerms?: string[];
-  currentYear?: number;
-}
-
-/** Quote a phrase and strip characters that would break PubMed's parser. */
-export function quoteTerm(value: string): string {
-  const cleaned = value
-    .replace(/["[\]()]/g, ' ')
+/** Strip characters that would break either source's parser. */
+export function cleanTerm(value: string): string {
+  return value
+    .replace(/["[\]():]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Quote a phrase for PubMed, which only needs quotes when there is a space. */
+function pubmedPhrase(value: string): string {
+  const cleaned = cleanTerm(value);
   return cleaned.includes(' ') ? `"${cleaned}"` : cleaned;
 }
 
-/** The topic clause: MeSH-anchored when we can, plus a title/abstract fallback. */
-export function topicClause(context: QueryContext): string {
-  const clauses = [`${quoteTerm(context.topic)}[Title/Abstract]`];
-  if (context.meshTerm) clauses.unshift(`${quoteTerm(context.meshTerm)}[MeSH Terms]`);
-  // A few synonyms widen recall; all of them would blow past PubMed's term
-  // limit and drown the query in near-duplicates.
-  for (const synonym of (context.synonyms ?? []).slice(0, 4)) {
-    clauses.push(`${quoteTerm(synonym)}[Title/Abstract]`);
-  }
-  const topic = `(${clauses.join(' OR ')})`;
-
-  const focus = (context.focusTerms ?? []).filter(Boolean);
-  if (focus.length === 0) return topic;
-  const focusClause = focus.map((term) => `${quoteTerm(term)}[Title/Abstract]`).join(' OR ');
-  return `${topic} AND (${focusClause})`;
+/** Europe PMC wants every phrase quoted, space or not. */
+function europePmcPhrase(value: string): string {
+  return `"${cleanTerm(value)}"`;
 }
 
-const HUMAN_FILTER = 'humans[MeSH Terms]';
+/**
+ * Every name for the topic, deduplicated, most specific first. A few synonyms
+ * widen recall; all of them would drown the query in near-duplicates.
+ */
+export function topicTerms(topic: TopicSpec, maxSynonyms = 4): string[] {
+  const all = [topic.meshTerm, topic.term, ...(topic.synonyms ?? []).slice(0, maxSynonyms)];
+  const seen = new Set<string>();
+  const terms: string[] = [];
+  for (const value of all) {
+    const cleaned = value ? cleanTerm(value) : '';
+    if (!cleaned) continue;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    terms.push(cleaned);
+  }
+  return terms;
+}
 
-export function planForRung(rung: RungId, context: QueryContext): QueryPlan {
-  const topic = topicClause(context);
-  const currentYear = context.currentYear ?? new Date().getFullYear();
+const PUBMED_TYPES: Record<EvidenceFilter, string> = {
+  review: 'review[Publication Type]',
+  'systematic-review': 'systematic review[Publication Type]',
+  'meta-analysis': 'meta-analysis[Publication Type]',
+  rct: 'randomized controlled trial[Publication Type]',
+  guideline: 'practice guideline[Publication Type]',
+};
+
+const EUROPE_PMC_TYPES: Record<EvidenceFilter, string> = {
+  review: 'PUB_TYPE:"review"',
+  'systematic-review': 'PUB_TYPE:"systematic review"',
+  'meta-analysis': 'PUB_TYPE:"meta-analysis"',
+  rct: 'PUB_TYPE:"randomized controlled trial"',
+  guideline: 'PUB_TYPE:"practice guideline"',
+};
+
+export function renderPubMedQuery(plan: QueryPlan): string {
+  const clauses: string[] = [];
+
+  const topic = topicTerms(plan.topic).map((term) => `${pubmedPhrase(term)}[Title/Abstract]`);
+  if (plan.topic.meshTerm) {
+    topic.unshift(`${pubmedPhrase(plan.topic.meshTerm)}[MeSH Terms]`);
+  }
+  clauses.push(`(${topic.join(' OR ')})`);
+
+  if (plan.publicationTypes.length > 0) {
+    clauses.push(`(${plan.publicationTypes.map((type) => PUBMED_TYPES[type]).join(' OR ')})`);
+  }
+  if (plan.anyText.length > 0) {
+    clauses.push(
+      `(${plan.anyText.map((text) => `${pubmedPhrase(text)}[Title/Abstract]`).join(' OR ')})`,
+    );
+  }
+  if (plan.humansOnly) clauses.push('humans[MeSH Terms]');
+
+  if (plan.fromYear !== undefined || plan.toYear !== undefined) {
+    const from = plan.fromYear ?? 1800;
+    const to = plan.toYear ?? new Date().getFullYear();
+    clauses.push(`("${from}"[Date - Publication] : "${to}"[Date - Publication])`);
+  }
+
+  return clauses.join(' AND ');
+}
+
+export function renderEuropePmcQuery(plan: QueryPlan): string {
+  const clauses: string[] = [];
+
+  const topic = topicTerms(plan.topic).map((term) => `TITLE_ABS:${europePmcPhrase(term)}`);
+  if (plan.topic.meshTerm) {
+    topic.unshift(`MESH:${europePmcPhrase(plan.topic.meshTerm)}`);
+  }
+  clauses.push(`(${topic.join(' OR ')})`);
+
+  if (plan.publicationTypes.length > 0) {
+    clauses.push(`(${plan.publicationTypes.map((type) => EUROPE_PMC_TYPES[type]).join(' OR ')})`);
+  }
+  if (plan.anyText.length > 0) {
+    clauses.push(
+      `(${plan.anyText.map((text) => `TITLE_ABS:${europePmcPhrase(text)}`).join(' OR ')})`,
+    );
+  }
+  if (plan.humansOnly) clauses.push('MESH:"Humans"');
+
+  if (plan.fromYear !== undefined || plan.toYear !== undefined) {
+    const from = plan.fromYear ?? 1800;
+    const to = plan.toYear ?? new Date().getFullYear();
+    clauses.push(`(FIRST_PDATE:[${from}-01-01 TO ${to}-12-31])`);
+  }
+
+  return clauses.join(' AND ');
+}
+
+export interface PlanOptions {
+  currentYear?: number;
+  /** Narrowing terms from the concept the learner is on right now. */
+  focusTerms?: string[];
+}
+
+export function planForRung(rung: RungId, topic: TopicSpec, options: PlanOptions = {}): QueryPlan {
+  const currentYear = options.currentYear ?? new Date().getFullYear();
+  const focus = options.focusTerms ?? [];
+  const base = { rung, topic, humansOnly: false } as const;
 
   switch (rung) {
     case 'orientation':
       return {
-        rung,
-        term: `${topic} AND (review[Publication Type] OR "overview"[Title])`,
+        ...base,
+        publicationTypes: ['review'],
+        anyText: focus,
         fromYear: currentYear - 8,
         limit: 8,
         explanation:
-          'Recent overviews and review articles to get the vocabulary and the shape of the field.',
+          'Recent reviews and overviews, to get the vocabulary and the shape of the field.',
       };
 
     case 'foundations':
       return {
-        rung,
-        term: `${topic} AND (review[Publication Type]) AND (physiology[MeSH Subheading] OR "physiology"[Title/Abstract] OR "anatomy"[Title/Abstract] OR "principles"[Title])`,
+        ...base,
+        publicationTypes: ['review'],
+        anyText: [...focus, 'physiology', 'anatomy', 'principles', 'fundamentals'],
         fromYear: currentYear - 15,
         limit: 10,
-        explanation: 'Reviews covering the underlying physiology and anatomy the topic rests on.',
+        explanation: 'Reviews covering the physiology and anatomy the topic rests on.',
       };
 
     case 'mechanism':
       return {
-        rung,
-        term: `${topic} AND ("mechanism"[Title/Abstract] OR "pathophysiology"[Title/Abstract] OR physiopathology[MeSH Subheading] OR "haemodynamics"[Title/Abstract] OR "hemodynamics"[Title/Abstract])`,
+        ...base,
+        publicationTypes: [],
+        anyText: [...focus, 'mechanism', 'pathophysiology', 'haemodynamics', 'hemodynamics'],
         fromYear: currentYear - 12,
         limit: 12,
         explanation: 'How it works and how it fails — mechanism and pathophysiology.',
@@ -94,8 +196,10 @@ export function planForRung(rung: RungId, context: QueryContext): QueryPlan {
 
     case 'applied':
       return {
-        rung,
-        term: `${topic} AND (${HUMAN_FILTER}) AND ("management"[Title/Abstract] OR "indications"[Title/Abstract] OR "complications"[Title/Abstract] OR therapy[MeSH Subheading] OR "practice guideline"[Publication Type])`,
+        ...base,
+        humansOnly: true,
+        publicationTypes: ['guideline', 'review'],
+        anyText: [...focus, 'management', 'indications', 'complications'],
         fromYear: currentYear - 8,
         limit: 12,
         explanation: 'Indications, management, and complications as they appear in practice.',
@@ -103,8 +207,9 @@ export function planForRung(rung: RungId, context: QueryContext): QueryPlan {
 
     case 'evidence':
       return {
-        rung,
-        term: `${topic} AND (randomized controlled trial[Publication Type] OR meta-analysis[Publication Type] OR systematic review[Publication Type] OR "practice guideline"[Publication Type])`,
+        ...base,
+        publicationTypes: ['rct', 'meta-analysis', 'systematic-review', 'guideline'],
+        anyText: focus,
         fromYear: currentYear - 20,
         limit: 15,
         explanation: 'The trials, meta-analyses, and guidelines that set current consensus.',
@@ -112,43 +217,12 @@ export function planForRung(rung: RungId, context: QueryContext): QueryPlan {
 
     case 'frontier':
       return {
-        rung,
-        term: `${topic} AND (${HUMAN_FILTER} OR "preprint"[Publication Type])`,
+        ...base,
+        publicationTypes: [],
+        anyText: focus,
         fromYear: currentYear - 2,
         limit: 20,
-        explanation: 'Everything from the last two years, newest and most-cited first.',
+        explanation: 'Everything from the last two years, newest and most relevant first.',
       };
   }
-}
-
-/**
- * "A flurry of ideas surrounding the concept": adjacent queries that map the
- * neighbourhood of a topic rather than drilling into it. Used to seed the
- * concept map before the learner has read anything.
- */
-export function neighbourhoodPlans(context: QueryContext): QueryPlan[] {
-  const topic = topicClause(context);
-  const currentYear = context.currentYear ?? new Date().getFullYear();
-  return [
-    {
-      rung: 'orientation',
-      term: `${topic} AND ("history"[Title/Abstract] OR history[MeSH Subheading])`,
-      limit: 5,
-      explanation: 'Where this came from and what problem it was invented to solve.',
-    },
-    {
-      rung: 'applied',
-      term: `${topic} AND ("controversy"[Title/Abstract] OR "debate"[Title/Abstract] OR "unanswered"[Title/Abstract] OR "uncertainty"[Title/Abstract])`,
-      fromYear: currentYear - 6,
-      limit: 6,
-      explanation: 'The open arguments — the fastest way to see where the edges of the field are.',
-    },
-    {
-      rung: 'mechanism',
-      term: `${topic} AND ("compared with"[Title/Abstract] OR "versus"[Title] OR "alternative"[Title/Abstract])`,
-      fromYear: currentYear - 8,
-      limit: 6,
-      explanation: 'Adjacent and competing approaches, to place the topic among its alternatives.',
-    },
-  ];
 }

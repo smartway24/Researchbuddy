@@ -10,7 +10,7 @@ const papers = parsePubmedXml(fixture('pubmed-ecmo.xml'));
 const base = {
   topicId: 'topic-1',
   rung: 'evidence' as const,
-  context: { topic: 'ECMO', meshTerm: 'Extracorporeal Membrane Oxygenation' },
+  context: { term: 'ECMO', meshTerm: 'Extracorporeal Membrane Oxygenation' },
   sources: [],
   now: NOW,
 };
@@ -49,6 +49,9 @@ test('the digest is capped so a session stays finishable', () => {
     makePaper({
       id: `pubmed:${i}`,
       externalId: String(i),
+      // On-topic: the digest excludes papers that are not about the topic
+      // before it ranks anything, so a fixture has to look relevant.
+      title: `ECMO cannulation study ${i}`,
       year: 2025,
       publicationTypes: ['Randomized Controlled Trial'],
       meshTerms: [`Theme ${i % 3}`],
@@ -73,10 +76,24 @@ test('an empty result set produces an empty digest, not an error', () => {
 });
 
 test('estimated reading time grows with full-text availability', () => {
-  const abstractOnly = assembleDigest([makePaper({ id: 'a', abstract: 'x'.repeat(50) })], base);
-  const fullText = assembleDigest(
-    [makePaper({ id: 'a', abstract: 'x'.repeat(50), openAccessUrl: 'https://x' })],
-    base,
-  );
+  const paper = { id: 'a', title: 'ECMO in adults', abstract: 'x'.repeat(50) };
+  const abstractOnly = assembleDigest([makePaper(paper)], base);
+  const fullText = assembleDigest([makePaper({ ...paper, openAccessUrl: 'https://x' })], base);
   assert.ok(estimatedMinutes(fullText) > estimatedMinutes(abstractOnly));
+});
+
+test('a strong paper about something else never reaches the reading list', () => {
+  const onTopic = makePaper({ id: 'on', title: 'ECMO for refractory cardiogenic shock' });
+  const offTopic = makePaper({
+    id: 'off',
+    title: 'Drugs for preventing postoperative nausea and vomiting: a network meta-analysis',
+    abstract: 'Antiemetics compared after general anaesthesia.',
+    publicationTypes: ['Meta-Analysis'],
+    year: 2020,
+    citedByCount: 127,
+  });
+
+  const digest = assembleDigest([onTopic, offTopic], base);
+  assert.deepEqual(digest.readingOrder, ['on']);
+  assert.equal(digest.candidateCount, 2, 'both were considered, one was excluded');
 });

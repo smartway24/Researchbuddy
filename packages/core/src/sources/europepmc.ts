@@ -1,6 +1,7 @@
 import type { Paper } from '../types.js';
 import { buildUrl, httpGetJson } from './http.js';
-import type { SearchQuery, SearchResult, SourceAdapter } from './types.js';
+import { renderEuropePmcQuery } from '../query.js';
+import { resolveQuery, type SearchQuery, type SearchResult, type SourceAdapter } from './types.js';
 
 const BASE = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search';
 
@@ -40,13 +41,16 @@ export class EuropePmcSource implements SourceAdapter {
   readonly isPublic = true;
 
   async search(query: SearchQuery): Promise<SearchResult> {
-    const term = applyDateRange(query);
+    const resolved = resolveQuery(query, renderEuropePmcQuery);
+    const term = query.plan ? resolved.term : applyDateRange(resolved);
     const url = buildUrl(BASE, {
       query: term,
       format: 'json',
       resultType: 'core',
-      pageSize: Math.min(query.limit ?? 25, 100),
-      sort: 'CITED desc',
+      pageSize: Math.min(resolved.limit, 100),
+      // Europe PMC's default sort is relevance. Sorting by citations instead
+      // floats big statistics reports to the top of any loose match, which is
+      // exactly the wrong failure when a query is imprecise.
     });
 
     const response = await httpGetJson<EuropePmcResponse>(url, {
@@ -64,7 +68,7 @@ export class EuropePmcSource implements SourceAdapter {
   }
 }
 
-function applyDateRange(query: SearchQuery): string {
+function applyDateRange(query: { term: string; fromYear?: number; toYear?: number }): string {
   if (query.fromYear === undefined && query.toYear === undefined) return query.term;
   const from = query.fromYear ?? 1800;
   const to = query.toYear ?? new Date().getFullYear();

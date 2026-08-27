@@ -1,3 +1,4 @@
+import { topicTerms, type TopicSpec } from './query.js';
 import type { EvidenceLevel, Paper, RungId, ScoredPaper } from './types.js';
 
 /**
@@ -238,4 +239,33 @@ function describeFit(preference: number): string {
 
 function round(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+/**
+ * Is this paper actually about the topic?
+ *
+ * A search can match on words and still return something unrelated — that is
+ * how a query for "PV loop" produced a meta-analysis about postoperative
+ * nausea. Ranking alone does not save you there: a strong review of the wrong
+ * subject still scores well. So relevance is a gate, not a weight.
+ *
+ * A paper passes if any name for the topic appears verbatim, or if every
+ * meaningful word of the topic appears somewhere in its text — the second rule
+ * catches "Pressure-Volume Loop" for a learner who typed "PV loop".
+ */
+export function matchesTopic(paper: Paper, topic: TopicSpec): boolean {
+  const haystack = [paper.title, paper.abstract ?? '', ...paper.meshTerms, ...paper.keywords]
+    .join(' ')
+    .toLowerCase();
+
+  const names = topicTerms(topic);
+  if (names.length === 0) return true;
+
+  if (names.some((name) => haystack.includes(name.toLowerCase()))) return true;
+
+  const words = (names[0] ?? '')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word.length > 2);
+  return words.length > 0 && words.every((word) => haystack.includes(word));
 }

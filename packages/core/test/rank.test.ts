@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   classifyEvidence,
+  matchesTopic,
   paperAgeYears,
   rankPapers,
   scorePaper,
@@ -97,4 +98,32 @@ test('paper age handles year-only, month, and missing dates', () => {
   assert.equal(paperAgeYears(makePaper({ year: 2026, publishedAt: '2026-06' }), NOW), 0);
   assert.ok((paperAgeYears(makePaper({ year: 2016 }), NOW) ?? 0) > 9);
   assert.equal(paperAgeYears(makePaper({}), NOW), null);
+});
+
+test('a paper about something else is not "about" the topic, however strong it is', () => {
+  const topic = { term: 'PV Loop', synonyms: ['Pressure-Volume Loop'] };
+
+  const offTopic = makePaper({
+    title: 'Drugs for preventing postoperative nausea and vomiting: a network meta-analysis',
+    abstract: 'We compared antiemetic drugs after general anaesthesia in adults.',
+    publicationTypes: ['Meta-Analysis'],
+  });
+  assert.equal(matchesTopic(offTopic, topic), false);
+
+  // Named differently in the paper than by the learner — still the same thing.
+  const synonym = makePaper({
+    title: 'Right Ventricular Pressure-Volume Loop Analysis in Large Animal Research',
+  });
+  assert.equal(matchesTopic(synonym, topic), true);
+
+  // All the words, scattered rather than as a phrase.
+  const scattered = makePaper({
+    title: 'Conductance catheters',
+    abstract: 'The PV relationship is traced as a closed loop during the cardiac cycle.',
+  });
+  assert.equal(matchesTopic(scattered, topic), true);
+});
+
+test('with no topic terms nothing is excluded', () => {
+  assert.equal(matchesTopic(makePaper({}), { term: '' }), true);
 });

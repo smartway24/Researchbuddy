@@ -76,7 +76,7 @@ export function DigestScreen({
           topicId,
           rung,
           context: {
-            topic: topic.canonicalTerm,
+            term: topic.canonicalTerm,
             ...(topic.meshTerm ? { meshTerm: topic.meshTerm } : {}),
             synonyms: topic.synonyms,
           },

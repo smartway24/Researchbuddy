@@ -1,7 +1,7 @@
 import { clusterByTheme } from './concepts.js';
 import { getRung } from './ladder.js';
-import { planForRung, type QueryContext } from './query.js';
-import { evidenceLabel, rankPapers } from './rank.js';
+import { planForRung, topicTerms, type TopicSpec } from './query.js';
+import { evidenceLabel, matchesTopic, rankPapers } from './rank.js';
 import { searchAll } from './sources/registry.js';
 import type { SourceAdapter } from './sources/types.js';
 import type { Digest, DigestSection, Paper, RungId, ScoredPaper } from './types.js';
@@ -15,7 +15,10 @@ import type { Digest, DigestSection, Paper, RungId, ScoredPaper } from './types.
 export interface BuildDigestOptions {
   topicId: string;
   rung: RungId;
-  context: QueryContext;
+  /** The topic, in every name we know for it. */
+  context: TopicSpec;
+  /** Terms from the concept being studied right now, used to narrow the search. */
+  focusTerms?: string[];
   sources: SourceAdapter[];
   /** Papers already read; excluded so a digest never repeats itself. */
   seenPaperIds?: Set<string>;
@@ -26,16 +29,15 @@ export interface BuildDigestOptions {
 }
 
 export async function buildDigest(options: BuildDigestOptions): Promise<Digest> {
-  const plan = planForRung(options.rung, options.context);
-  const query: Parameters<SourceAdapter['search']>[0] = {
-    term: plan.term,
-    limit: plan.limit,
-  };
-  if (plan.fromYear !== undefined) query.fromYear = plan.fromYear;
-  if (plan.toYear !== undefined) query.toYear = plan.toYear;
-  if (options.signal) query.signal = options.signal;
+  const plan = planForRung(options.rung, options.context, {
+    ...(options.focusTerms?.length ? { focusTerms: options.focusTerms } : {}),
+  });
 
-  const federated = await searchAll(options.sources, query);
+  // The plan travels intact: each adapter renders it into its own syntax.
+  const federated = await searchAll(options.sources, {
+    plan,
+    ...(options.signal ? { signal: options.signal } : {}),
+  });
   return { ...assembleDigest(federated.papers, options), sourceStatus: federated.bySource };
 }
 
@@ -77,21 +79,21 @@ export function assembleDigest(papers: Paper[], options: BuildDigestOptions): Di
   const maxPapers = options.maxPapers ?? 12;
 
   const candidateCount = papers.length;
-  const fresh = papers.filter((paper) => !seen.has(paper.id));
+  // Relevance first, ranking second. A strong paper about the wrong subject
+  // still scores well, so it has to be excluded before scoring, not after.
+  const relevant = papers.filter((paper) => matchesTopic(paper, options.context));
+  const fresh = relevant.filter((paper) => !seen.has(paper.id));
 
   const scoreOptions: Parameters<typeof rankPapers>[1] = { rung: options.rung, now };
-  if (options.context.focusTerms?.length) scoreOptions.focusTerms = options.context.focusTerms;
+  const focus = options.focusTerms?.length ? options.focusTerms : topicTerms(options.context);
+  if (focus.length > 0) scoreOptions.focusTerms = focus;
 
   const ranked = rankPapers(fresh, scoreOptions).slice(0, maxPapers);
   const byId = new Map(ranked.map((scored) => [scored.paper.id, scored]));
 
   // The topic and every name for it must not be reported as concepts "around"
   // itself — that is the single most common way a concept map turns useless.
-  const exclude = [
-    options.context.topic,
-    options.context.meshTerm,
-    ...(options.context.synonyms ?? []),
-  ].filter((value): value is string => Boolean(value));
+  const exclude = topicTerms(options.context, 20);
   const { themes, unthemed } = clusterByTheme(
     ranked.map((scored) => scored.paper),
     { exclude, minPaperCount: 2, limit: 5 },

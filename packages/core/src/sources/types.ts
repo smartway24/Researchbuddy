@@ -1,13 +1,40 @@
+import type { QueryPlan } from '../query.js';
 import type { Paper, SourceId } from '../types.js';
 
 export interface SearchQuery {
-  /** Source-native query string, produced by `query.ts`. */
-  term: string;
+  /**
+   * What to search for, described once and rendered into each source's own
+   * syntax by the adapter. Prefer this: a query string written for one source
+   * and sent to another does not fail, it silently returns nonsense.
+   */
+  plan?: QueryPlan;
+  /** Raw source-native query, for ad-hoc searches that bypass planning. */
+  term?: string;
   limit?: number;
   /** Inclusive lower bound on publication year. */
   fromYear?: number;
   toYear?: number;
   signal?: AbortSignal;
+}
+
+/**
+ * Collapse a query into the values an adapter needs. The plan wins where it
+ * sets something; explicit fields on the query override it.
+ */
+export function resolveQuery(
+  query: SearchQuery,
+  render: (plan: QueryPlan) => string,
+): { term: string; limit: number; fromYear?: number; toYear?: number } {
+  const term = query.plan ? render(query.plan) : (query.term ?? '');
+  const limit = query.limit ?? query.plan?.limit ?? 25;
+  const fromYear = query.fromYear ?? query.plan?.fromYear;
+  const toYear = query.toYear ?? query.plan?.toYear;
+  return {
+    term,
+    limit,
+    ...(fromYear !== undefined ? { fromYear } : {}),
+    ...(toYear !== undefined ? { toYear } : {}),
+  };
 }
 
 export interface SearchResult {

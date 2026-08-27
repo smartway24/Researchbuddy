@@ -39,7 +39,7 @@ test('a full digest can be built end to end', options, async () => {
   const digest = await buildDigest({
     topicId: 'live-topic',
     rung: 'evidence',
-    context: { topic: 'ECMO', meshTerm: 'Extracorporeal Membrane Oxygenation' },
+    context: { term: 'ECMO', meshTerm: 'Extracorporeal Membrane Oxygenation' },
     sources: defaultSources(),
     maxPapers: 8,
   });

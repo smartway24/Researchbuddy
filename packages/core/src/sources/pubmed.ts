@@ -1,6 +1,7 @@
 import type { Paper } from '../types.js';
 import { buildUrl, httpGet, httpGetJson } from './http.js';
-import type { SearchQuery, SearchResult, SourceAdapter } from './types.js';
+import { renderPubMedQuery } from '../query.js';
+import { resolveQuery, type SearchQuery, type SearchResult, type SourceAdapter } from './types.js';
 import {
   childrenNamed,
   findAll,
@@ -53,8 +54,10 @@ export class PubMedSource implements SourceAdapter {
   }
 
   async search(query: SearchQuery): Promise<SearchResult> {
-    const term = applyDateRange(query);
-    const limit = Math.min(query.limit ?? 25, 100);
+    const resolved = resolveQuery(query, renderPubMedQuery);
+    // A plan already carries its own date clause; a raw term does not.
+    const term = query.plan ? resolved.term : applyDateRange(resolved);
+    const limit = Math.min(resolved.limit, 100);
 
     const searchUrl = buildUrl(`${EUTILS}/esearch.fcgi`, {
       ...this.common(),
@@ -95,7 +98,7 @@ export class PubMedSource implements SourceAdapter {
 }
 
 /** PubMed reads date filters inline rather than as query parameters. */
-function applyDateRange(query: SearchQuery): string {
+function applyDateRange(query: { term: string; fromYear?: number; toYear?: number }): string {
   if (query.fromYear === undefined && query.toYear === undefined) return query.term;
   const from = query.fromYear ?? 1800;
   const to = query.toYear ?? new Date().getFullYear();

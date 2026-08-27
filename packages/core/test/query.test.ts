@@ -1,78 +1,115 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { neighbourhoodPlans, planForRung, quoteTerm, topicClause } from '../src/query.js';
+import {
+  cleanTerm,
+  planForRung,
+  renderEuropePmcQuery,
+  renderPubMedQuery,
+  topicTerms,
+  type TopicSpec,
+} from '../src/query.js';
 import { RUNG_ORDER } from '../src/types.js';
 
-const context = {
-  topic: 'ECMO',
+const ecmo: TopicSpec = {
+  term: 'ECMO',
   meshTerm: 'Extracorporeal Membrane Oxygenation',
-  currentYear: 2026,
+  synonyms: ['Extracorporeal Life Support', 'ECLS Treatment'],
 };
 
-test('multi-word terms are quoted and single words are not', () => {
-  assert.equal(quoteTerm('ECMO'), 'ECMO');
-  assert.equal(
-    quoteTerm('Extracorporeal Membrane Oxygenation'),
-    '"Extracorporeal Membrane Oxygenation"',
-  );
+const options = { currentYear: 2026 };
+
+test('characters that would break either parser are stripped', () => {
+  assert.equal(cleanTerm('ARDS (severe) [adult]:'), 'ARDS severe adult');
+  assert.equal(cleanTerm('  PV   Loop '), 'PV Loop');
 });
 
-test('characters that would break the query parser are stripped', () => {
-  assert.equal(quoteTerm('ARDS (severe) [adult]'), '"ARDS severe adult"');
-});
-
-test('the topic clause anchors on MeSH when available', () => {
-  const clause = topicClause(context);
-  assert.match(clause, /\[MeSH Terms\]/);
-  assert.match(clause, /\[Title\/Abstract\]/);
-  assert.equal(topicClause({ topic: 'ECMO' }).includes('MeSH'), false);
-});
-
-test('focus terms narrow the query with an AND', () => {
-  const clause = topicClause({ ...context, focusTerms: ['recirculation'] });
-  assert.match(clause, /\) AND \(/);
-  assert.match(clause, /recirculation\[Title\/Abstract\]/);
-});
-
-test('a few synonyms widen the query without unbounding it', () => {
-  const clause = topicClause({
-    ...context,
-    synonyms: ['Extracorporeal Life Support', 'ECLS Treatment', 'a', 'b', 'c', 'd'],
-  });
-  assert.match(clause, /"Extracorporeal Life Support"\[Title\/Abstract\]/);
-  assert.equal(
-    (clause.match(/\[Title\/Abstract\]/g) ?? []).length,
-    5,
-    'topic plus at most four synonyms',
-  );
+test('topic terms are deduplicated, descriptor first, synonyms bounded', () => {
+  assert.deepEqual(topicTerms(ecmo), [
+    'Extracorporeal Membrane Oxygenation',
+    'ECMO',
+    'Extracorporeal Life Support',
+    'ECLS Treatment',
+  ]);
+  assert.deepEqual(topicTerms({ term: 'ECMO', meshTerm: 'ECMO' }), ['ECMO'], 'no duplicates');
+  assert.equal(topicTerms({ term: 'x', synonyms: ['a', 'b', 'c', 'd', 'e', 'f'] }).length, 5);
 });
 
 test('every rung produces a usable, explained plan', () => {
   for (const rung of RUNG_ORDER) {
-    const plan = planForRung(rung, context);
+    const plan = planForRung(rung, ecmo, options);
     assert.equal(plan.rung, rung);
-    assert.ok(plan.term.includes('ECMO'));
     assert.ok(plan.limit > 0 && plan.limit <= 25);
     assert.ok(plan.explanation.length > 20, `${rung} needs an explanation`);
+    assert.ok(renderPubMedQuery(plan).includes('ECMO'));
+    assert.ok(renderEuropePmcQuery(plan).includes('ECMO'));
+  }
+});
+
+test('PubMed queries use PubMed field tags', () => {
+  const query = renderPubMedQuery(planForRung('evidence', ecmo, options));
+  assert.match(query, /"Extracorporeal Membrane Oxygenation"\[MeSH Terms\]/);
+  assert.match(query, /ECMO\[Title\/Abstract\]/);
+  assert.match(query, /randomized controlled trial\[Publication Type\]/);
+  assert.match(query, /\[Date - Publication\]/);
+});
+
+test('Europe PMC queries use Europe PMC field names', () => {
+  const query = renderEuropePmcQuery(planForRung('evidence', ecmo, options));
+  assert.match(query, /MESH:"Extracorporeal Membrane Oxygenation"/);
+  assert.match(query, /TITLE_ABS:"ECMO"/);
+  assert.match(query, /PUB_TYPE:"randomized controlled trial"/);
+  assert.match(query, /FIRST_PDATE:\[2006-01-01 TO 2026-12-31\]/);
+});
+
+test("neither renderer leaks the other source's syntax", () => {
+  for (const rung of RUNG_ORDER) {
+    const plan = planForRung(rung, ecmo, options);
+
+    const pubmed = renderPubMedQuery(plan);
+    assert.equal(
+      pubmed.includes('TITLE_ABS:'),
+      false,
+      `${rung}: Europe PMC syntax in PubMed query`,
+    );
+    assert.equal(pubmed.includes('PUB_TYPE:'), false);
+    assert.equal(pubmed.includes('FIRST_PDATE'), false);
+
+    const europe = renderEuropePmcQuery(plan);
+    assert.equal(
+      europe.includes('[Title/Abstract]'),
+      false,
+      `${rung}: PubMed syntax in Europe PMC query`,
+    );
+    assert.equal(europe.includes('[Publication Type]'), false);
+    assert.equal(europe.includes('[Date - Publication]'), false);
   }
 });
 
 test('the frontier rung only looks at the last two years', () => {
-  const plan = planForRung('frontier', context);
-  assert.equal(plan.fromYear, 2024);
-  const orientation = planForRung('orientation', context);
-  assert.ok((orientation.fromYear ?? 0) < 2024, 'orientation reaches further back');
+  assert.equal(planForRung('frontier', ecmo, options).fromYear, 2024);
+  assert.ok((planForRung('orientation', ecmo, options).fromYear ?? 0) < 2024);
 });
 
-test('the evidence rung filters to trials, syntheses and guidelines', () => {
-  const plan = planForRung('evidence', context);
-  assert.match(plan.term, /randomized controlled trial\[Publication Type\]/);
-  assert.match(plan.term, /meta-analysis\[Publication Type\]/);
+test('the applied rung restricts to human studies, the mechanism rung does not', () => {
+  assert.equal(planForRung('applied', ecmo, options).humansOnly, true);
+  assert.match(renderPubMedQuery(planForRung('applied', ecmo, options)), /humans\[MeSH Terms\]/);
+  assert.equal(planForRung('mechanism', ecmo, options).humansOnly, false);
 });
 
-test('neighbourhood plans map around the topic rather than into it', () => {
-  const plans = neighbourhoodPlans(context);
-  assert.equal(plans.length, 3);
-  assert.ok(plans.some((plan) => /history/i.test(plan.term)));
-  assert.ok(plans.some((plan) => /controversy/i.test(plan.term)));
+test('focus terms narrow the search without replacing the topic', () => {
+  const plan = planForRung('orientation', ecmo, { ...options, focusTerms: ['recirculation'] });
+  assert.deepEqual(plan.anyText, ['recirculation']);
+  const query = renderPubMedQuery(plan);
+  assert.match(query, /recirculation\[Title\/Abstract\]/);
+  assert.match(query, /ECMO\[Title\/Abstract\]/);
+});
+
+test('a topic with no MeSH descriptor still produces a valid query', () => {
+  const plan = planForRung('orientation', { term: 'PV Loop' }, options);
+  const pubmed = renderPubMedQuery(plan);
+  const europe = renderEuropePmcQuery(plan);
+  assert.match(pubmed, /"PV Loop"\[Title\/Abstract\]/);
+  assert.equal(pubmed.includes('[MeSH Terms]'), false, 'no MeSH clause without a descriptor');
+  assert.match(europe, /TITLE_ABS:"PV Loop"/);
+  assert.equal(europe.includes('MESH:'), false);
 });
