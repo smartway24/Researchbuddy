@@ -75,3 +75,29 @@ test('a failing source is reported, not fatal', async () => {
   );
   assert.equal(result.bySource.find((entry) => entry.sourceId === 'pubmed')?.count, 1);
 });
+
+test('the same paper is merged when one source has a DOI and the other does not', () => {
+  const merged = dedupe([
+    makePaper({ id: 'pubmed:1', title: 'Understanding the pressure-volume loop', pmid: '1' }),
+    makePaper({
+      id: 'europepmc:MED1',
+      sourceId: 'europepmc',
+      title: 'Understanding the Pressure-Volume Loop',
+      doi: '10.1/x',
+      openAccessUrl: 'https://oa',
+    }),
+  ]);
+  assert.equal(merged.length, 1, 'differing identifiers must not split one paper in two');
+  assert.equal(merged[0]?.doi, '10.1/x');
+  assert.equal(merged[0]?.pmid, '1', 'identifiers from both records survive');
+});
+
+test('same title but different DOIs stays two papers', () => {
+  assert.equal(
+    dedupe([
+      makePaper({ id: 'a', title: 'Cardiac mechanics', doi: '10.1/a' }),
+      makePaper({ id: 'b', title: 'Cardiac mechanics', doi: '10.1/b' }),
+    ]).length,
+    2,
+  );
+});

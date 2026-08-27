@@ -1,3 +1,4 @@
+import { assessLevel, RUNG_LEVEL_TARGET } from './level.js';
 import { topicTerms, type TopicSpec } from './query.js';
 import type { EvidenceLevel, Paper, RungId, ScoredPaper } from './types.js';
 
@@ -127,6 +128,8 @@ const RUNG_PREFERENCE: Record<RungId, Partial<Record<EvidenceLevel, number>>> = 
 
 export interface ScoreOptions {
   rung: RungId;
+  /** The topic, so aboutness and level can be judged. */
+  topic?: TopicSpec;
   /** Terms the learner is studying now; overlap raises topical fit. */
   focusTerms?: string[];
   now?: Date;
@@ -175,8 +178,26 @@ export function scorePaper(paper: Paper, options: ScoreOptions): ScoredPaper {
   const readability = paper.abstract ? 1 : 0.6;
   if (!paper.abstract) reasons.push('No abstract indexed');
 
+  // Is it about the topic, and is it pitched where the learner is? On the
+  // lower rungs this matters more than anything else about the paper.
+  const target = RUNG_LEVEL_TARGET[options.rung];
+  let suitability = 0.5;
+  if (options.topic && target) {
+    const assessment = assessLevel(paper, options.topic);
+    const levelFit = target.levels.includes(assessment.level)
+      ? 1
+      : target.levels.length > 0 && assessment.level === 'intermediate'
+        ? 0.5
+        : 0.15;
+    suitability = 0.5 * assessment.aboutness + 0.5 * levelFit * assessment.pedagogy;
+    reasons.unshift(...assessment.reasons.slice(0, 2));
+  }
+
+  const levelWeight = options.topic && target ? target.weight : 0;
+  const rest = 1 - levelWeight;
   const score = round(
-    (0.4 * evidence + 0.28 * recency + 0.17 * fit + 0.1 * impact + 0.05 * readability) *
+    (levelWeight * suitability +
+      rest * (0.4 * evidence + 0.28 * recency + 0.17 * fit + 0.1 * impact + 0.05 * readability)) *
       (paper.openAccessUrl ? 1.03 : 1),
   );
 

@@ -1,6 +1,7 @@
 import { clusterByTheme } from './concepts.js';
 import { getRung } from './ladder.js';
 import { planForRung, topicTerms, type TopicSpec } from './query.js';
+import { aboutness, assessLevel, meetsLevel, RUNG_LEVEL_TARGET } from './level.js';
 import { evidenceLabel, matchesTopic, rankPapers } from './rank.js';
 import { searchAll } from './sources/registry.js';
 import type { SourceAdapter } from './sources/types.js';
@@ -81,10 +82,21 @@ export function assembleDigest(papers: Paper[], options: BuildDigestOptions): Di
   const candidateCount = papers.length;
   // Relevance first, ranking second. A strong paper about the wrong subject
   // still scores well, so it has to be excluded before scoring, not after.
-  const relevant = papers.filter((paper) => matchesTopic(paper, options.context));
+  const target = RUNG_LEVEL_TARGET[options.rung];
+  const minAboutness = target?.minAboutness ?? 0;
+  const relevant = papers.filter(
+    (paper) =>
+      matchesTopic(paper, options.context) &&
+      aboutness(paper, options.context).score >= minAboutness &&
+      meetsLevel(assessLevel(paper, options.context), target?.excludeBelow),
+  );
   const fresh = relevant.filter((paper) => !seen.has(paper.id));
 
-  const scoreOptions: Parameters<typeof rankPapers>[1] = { rung: options.rung, now };
+  const scoreOptions: Parameters<typeof rankPapers>[1] = {
+    rung: options.rung,
+    topic: options.context,
+    now,
+  };
   const focus = options.focusTerms?.length ? options.focusTerms : topicTerms(options.context);
   if (focus.length > 0) scoreOptions.focusTerms = focus;
 

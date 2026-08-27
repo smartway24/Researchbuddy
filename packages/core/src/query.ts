@@ -34,6 +34,15 @@ export interface QueryPlan {
   anyText: string[];
   /** Restrict to human studies. */
   humansOnly: boolean;
+  /**
+   * Require the topic in the *title*, not just anywhere in the record.
+   *
+   * Authors put the subject of the work in the title and their tools in the
+   * abstract, so this is the cheapest strong signal that a paper is about the
+   * topic rather than merely using it. The lower rungs demand it; the frontier
+   * does not, because that is where a paper applying the concept is the point.
+   */
+  titleAnchored: boolean;
   fromYear?: number;
   toYear?: number;
   limit: number;
@@ -98,9 +107,13 @@ const EUROPE_PMC_TYPES: Record<EvidenceFilter, string> = {
 export function renderPubMedQuery(plan: QueryPlan): string {
   const clauses: string[] = [];
 
-  const topic = topicTerms(plan.topic).map((term) => `${pubmedPhrase(term)}[Title/Abstract]`);
+  const field = plan.titleAnchored ? '[Title]' : '[Title/Abstract]';
+  const topic = topicTerms(plan.topic).map((term) => `${pubmedPhrase(term)}${field}`);
   if (plan.topic.meshTerm) {
-    topic.unshift(`${pubmedPhrase(plan.topic.meshTerm)}[MeSH Terms]`);
+    // MeSH Major Topic is NLM saying the paper is principally about this,
+    // which is the same claim the title makes, made by an indexer.
+    const mesh = plan.titleAnchored ? '[MeSH Major Topic]' : '[MeSH Terms]';
+    topic.unshift(`${pubmedPhrase(plan.topic.meshTerm)}${mesh}`);
   }
   clauses.push(`(${topic.join(' OR ')})`);
 
@@ -126,7 +139,8 @@ export function renderPubMedQuery(plan: QueryPlan): string {
 export function renderEuropePmcQuery(plan: QueryPlan): string {
   const clauses: string[] = [];
 
-  const topic = topicTerms(plan.topic).map((term) => `TITLE_ABS:${europePmcPhrase(term)}`);
+  const field = plan.titleAnchored ? 'TITLE' : 'TITLE_ABS';
+  const topic = topicTerms(plan.topic).map((term) => `${field}:${europePmcPhrase(term)}`);
   if (plan.topic.meshTerm) {
     topic.unshift(`MESH:${europePmcPhrase(plan.topic.meshTerm)}`);
   }
@@ -160,37 +174,41 @@ export interface PlanOptions {
 export function planForRung(rung: RungId, topic: TopicSpec, options: PlanOptions = {}): QueryPlan {
   const currentYear = options.currentYear ?? new Date().getFullYear();
   const focus = options.focusTerms ?? [];
-  const base = { rung, topic, humansOnly: false } as const;
+  const base = { rung, topic, humansOnly: false, titleAnchored: false } as const;
 
   switch (rung) {
     case 'orientation':
       return {
         ...base,
-        publicationTypes: ['review'],
+        // No publication-type filter: "review" is a metadata tag, not a level.
+        // Aboutness comes from the title; level is judged after retrieval.
+        titleAnchored: true,
+        publicationTypes: [],
         anyText: focus,
-        fromYear: currentYear - 8,
-        limit: 8,
-        explanation:
-          'Recent reviews and overviews, to get the vocabulary and the shape of the field.',
+        fromYear: currentYear - 20,
+        limit: 25,
+        explanation: 'Papers written to explain the subject rather than to report a new result.',
       };
 
     case 'foundations':
       return {
         ...base,
-        publicationTypes: ['review'],
-        anyText: [...focus, 'physiology', 'anatomy', 'principles', 'fundamentals'],
-        fromYear: currentYear - 15,
-        limit: 10,
-        explanation: 'Reviews covering the physiology and anatomy the topic rests on.',
+        titleAnchored: true,
+        publicationTypes: [],
+        anyText: [...focus, 'physiology', 'anatomy', 'physics', 'principles', 'mechanics'],
+        fromYear: currentYear - 25,
+        limit: 25,
+        explanation: 'The physics, physiology, and anatomy the topic rests on.',
       };
 
     case 'mechanism':
       return {
         ...base,
+        titleAnchored: true,
         publicationTypes: [],
         anyText: [...focus, 'mechanism', 'pathophysiology', 'haemodynamics', 'hemodynamics'],
-        fromYear: currentYear - 12,
-        limit: 12,
+        fromYear: currentYear - 15,
+        limit: 20,
         explanation: 'How it works and how it fails — mechanism and pathophysiology.',
       };
 

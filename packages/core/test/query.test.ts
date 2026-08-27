@@ -101,15 +101,36 @@ test('focus terms narrow the search without replacing the topic', () => {
   assert.deepEqual(plan.anyText, ['recirculation']);
   const query = renderPubMedQuery(plan);
   assert.match(query, /recirculation\[Title\/Abstract\]/);
-  assert.match(query, /ECMO\[Title\/Abstract\]/);
+  assert.match(query, /ECMO\[Title\]/, 'orientation anchors the topic to the title');
 });
 
 test('a topic with no MeSH descriptor still produces a valid query', () => {
   const plan = planForRung('orientation', { term: 'PV Loop' }, options);
   const pubmed = renderPubMedQuery(plan);
   const europe = renderEuropePmcQuery(plan);
-  assert.match(pubmed, /"PV Loop"\[Title\/Abstract\]/);
-  assert.equal(pubmed.includes('[MeSH Terms]'), false, 'no MeSH clause without a descriptor');
-  assert.match(europe, /TITLE_ABS:"PV Loop"/);
+  assert.match(pubmed, /"PV Loop"\[Title\]/);
+  assert.equal(pubmed.includes('[MeSH'), false, 'no MeSH clause without a descriptor');
+  assert.match(europe, /TITLE:"PV Loop"/);
   assert.equal(europe.includes('MESH:'), false);
+});
+
+test('the teaching rungs anchor the topic to the title, the frontier does not', () => {
+  for (const rung of ['orientation', 'foundations', 'mechanism'] as const) {
+    const plan = planForRung(rung, ecmo, options);
+    assert.equal(plan.titleAnchored, true, `${rung} should be title-anchored`);
+    assert.match(renderPubMedQuery(plan), /ECMO\[Title\]/);
+    assert.match(renderPubMedQuery(plan), /\[MeSH Major Topic\]/);
+    assert.match(renderEuropePmcQuery(plan), /TITLE:"ECMO"/);
+  }
+  for (const rung of ['applied', 'evidence', 'frontier'] as const) {
+    const plan = planForRung(rung, ecmo, options);
+    assert.equal(plan.titleAnchored, false, `${rung} should search the whole record`);
+    assert.match(renderPubMedQuery(plan), /ECMO\[Title\/Abstract\]/);
+  }
+});
+
+test('orientation no longer filters on publication type', () => {
+  // "review" is a metadata tag, not a level: a specialist review of a topic is
+  // still a review. Level is judged after retrieval instead.
+  assert.deepEqual(planForRung('orientation', ecmo, options).publicationTypes, []);
 });

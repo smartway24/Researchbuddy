@@ -5,6 +5,7 @@ export * from './query.js';
 export * from './rank.js';
 export * from './concepts.js';
 export * from './digest.js';
+export * from './level.js';
 export {
   Cache,
   CachingSource,

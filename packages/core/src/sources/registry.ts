@@ -70,30 +70,65 @@ export async function searchAll(
  * duplicates contribute — one source often knows the DOI and another the PMC id.
  */
 export function dedupe(papers: Paper[]): Paper[] {
-  const byKey = new Map<string, Paper>();
+  // One paper can arrive with a DOI from one source and without from another.
+  // Keying on a single identifier then produces two different keys for the
+  // same work, so every identifier a record carries points at its entry and a
+  // match on *any* of them counts as a duplicate.
+  const index = new Map<string, number>();
+  const merged: Paper[] = [];
 
   for (const paper of papers) {
-    const key = dedupeKey(paper);
-    const existing = byKey.get(key);
-    if (!existing) {
-      byKey.set(key, paper);
+    const keys = dedupeKeys(paper);
+    const hit = keys
+      .map((key) => index.get(key))
+      .find((slot) => slot !== undefined && !contradicts(paper, merged[slot]));
+
+    if (hit === undefined) {
+      const slot = merged.length;
+      merged.push(paper);
+      for (const key of keys) index.set(key, slot);
       continue;
     }
+
+    const existing = merged[hit];
+    if (!existing) continue;
     const [keep, drop] =
       richness(paper) > richness(existing) ? [paper, existing] : [existing, paper];
-    byKey.set(key, mergePapers(keep, drop));
+    const result = mergePapers(keep, drop);
+    merged[hit] = result;
+    // The merged record can carry identifiers neither original had alone.
+    for (const key of dedupeKeys(result)) index.set(key, hit);
   }
 
-  return [...byKey.values()];
+  return merged;
 }
 
-function dedupeKey(paper: Paper): string {
-  if (paper.doi) return `doi:${paper.doi.toLowerCase()}`;
-  if (paper.pmid) return `pmid:${paper.pmid}`;
-  return `title:${paper.title
+/**
+ * Two records that both carry a DOI, and different ones, are different works
+ * however alike their titles look — a preprint and its published version, or
+ * two papers that genuinely share a name.
+ */
+function contradicts(paper: Paper, other: Paper | undefined): boolean {
+  if (!other?.doi || !paper.doi) return false;
+  return normaliseDoi(paper.doi) !== normaliseDoi(other.doi);
+}
+
+function normaliseDoi(doi: string): string {
+  return doi.toLowerCase().replace(/^https?:\/\/doi\.org\//, '');
+}
+
+/** Every identifier this record could be recognised by. */
+function dedupeKeys(paper: Paper): string[] {
+  const keys: string[] = [];
+  if (paper.doi) keys.push(`doi:${normaliseDoi(paper.doi)}`);
+  if (paper.pmid) keys.push(`pmid:${paper.pmid}`);
+  if (paper.pmcid) keys.push(`pmcid:${paper.pmcid.toLowerCase()}`);
+  const title = paper.title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
-    .trim()}`;
+    .trim();
+  if (title) keys.push(`title:${title}`);
+  return keys;
 }
 
 function richness(paper: Paper): number {
