@@ -88,6 +88,25 @@ export function topicTerms(topic: TopicSpec, maxSynonyms = 4): string[] {
   return terms;
 }
 
+/**
+ * The names to match as free text, which is not the same list as every name
+ * the topic has.
+ *
+ * When a MeSH descriptor is available it is matched as a descriptor, so
+ * matching its *name* as text too only adds ambiguity: "Respiratory Distress
+ * Syndrome" as free text hits neonatal RDS, a different descriptor, which is
+ * how an adult ARDS reading list filled up with newborns. The indexer's
+ * judgement is more precise than the phrase, so let it do that job alone.
+ */
+export function textTerms(topic: TopicSpec): string[] {
+  const all = topicTerms(topic);
+  if (!topic.meshTerm) return all;
+  const descriptor = topic.meshTerm.toLowerCase();
+  const rest = all.filter((term) => term.toLowerCase() !== descriptor);
+  // Unless the descriptor is all we have to go on.
+  return rest.length > 0 ? rest : all;
+}
+
 const PUBMED_TYPES: Record<EvidenceFilter, string> = {
   review: 'review[Publication Type]',
   'systematic-review': 'systematic review[Publication Type]',
@@ -108,11 +127,16 @@ export function renderPubMedQuery(plan: QueryPlan): string {
   const clauses: string[] = [];
 
   const field = plan.titleAnchored ? '[Title]' : '[Title/Abstract]';
-  const topic = topicTerms(plan.topic).map((term) => `${pubmedPhrase(term)}${field}`);
+  const topic = textTerms(plan.topic).map((term) => `${pubmedPhrase(term)}${field}`);
   if (plan.topic.meshTerm) {
     // MeSH Major Topic is NLM saying the paper is principally about this,
     // which is the same claim the title makes, made by an indexer.
-    const mesh = plan.titleAnchored ? '[MeSH Major Topic]' : '[MeSH Terms]';
+    //
+    // `:noexp` stops PubMed walking down the MeSH tree. Exploding
+    // "Respiratory Distress Syndrome" silently includes its narrower newborn
+    // term, which is how an adult ARDS reading list acquired papers on
+    // surfactant administration and neonatal hypoglycaemia.
+    const mesh = plan.titleAnchored ? '[MeSH Major Topic:noexp]' : '[MeSH Terms:noexp]';
     topic.unshift(`${pubmedPhrase(plan.topic.meshTerm)}${mesh}`);
   }
   clauses.push(`(${topic.join(' OR ')})`);
@@ -125,7 +149,7 @@ export function renderPubMedQuery(plan: QueryPlan): string {
       `(${plan.anyText.map((text) => `${pubmedPhrase(text)}[Title/Abstract]`).join(' OR ')})`,
     );
   }
-  if (plan.humansOnly) clauses.push('humans[MeSH Terms]');
+  if (plan.humansOnly) clauses.push('humans[MeSH Terms:noexp]');
 
   if (plan.fromYear !== undefined || plan.toYear !== undefined) {
     const from = plan.fromYear ?? 1800;
@@ -140,10 +164,12 @@ export function renderEuropePmcQuery(plan: QueryPlan): string {
   const clauses: string[] = [];
 
   const field = plan.titleAnchored ? 'TITLE' : 'TITLE_ABS';
+  // No MeSH clause here, deliberately. Europe PMC's MESH: field matches far
+  // more loosely than PubMed's — the same descriptor returned 7,354 results
+  // against PubMed's 87, including minimally invasive lung cancer surgery.
+  // PubMed already covers indexed material precisely; this source earns its
+  // place on preprints and open access, so let it match on names alone.
   const topic = topicTerms(plan.topic).map((term) => `${field}:${europePmcPhrase(term)}`);
-  if (plan.topic.meshTerm) {
-    topic.unshift(`MESH:${europePmcPhrase(plan.topic.meshTerm)}`);
-  }
   clauses.push(`(${topic.join(' OR ')})`);
 
   if (plan.publicationTypes.length > 0) {
@@ -186,7 +212,9 @@ export function planForRung(rung: RungId, topic: TopicSpec, options: PlanOptions
         publicationTypes: [],
         anyText: focus,
         fromYear: currentYear - 20,
-        limit: 25,
+        // Retrieve wide and judge hard: the gate throws most of this away, and
+        // a narrow search would leave it nothing to find.
+        limit: 60,
         explanation: 'Papers written to explain the subject rather than to report a new result.',
       };
 
@@ -197,7 +225,7 @@ export function planForRung(rung: RungId, topic: TopicSpec, options: PlanOptions
         publicationTypes: [],
         anyText: [...focus, 'physiology', 'anatomy', 'physics', 'principles', 'mechanics'],
         fromYear: currentYear - 25,
-        limit: 25,
+        limit: 60,
         explanation: 'The physics, physiology, and anatomy the topic rests on.',
       };
 

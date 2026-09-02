@@ -130,11 +130,15 @@ export function pedagogy(paper: Paper): { score: number; reasons: string[] } {
   const title = paper.title;
   const abstract = paper.abstract ?? '';
   const reasons: string[] = [];
-  let score = 0.4;
+  // Start below the intermediate threshold. A paper showing no sign of
+  // teaching anything is a specialist paper by default — starting at the
+  // threshold let anything with no signal at all through the foundations
+  // gate, which is how vancomycin pharmacokinetics became an ECMO foundation.
+  let score = 0.3;
 
   const teaching = TEACHING_TITLE.filter((pattern) => pattern.test(title)).length;
   if (teaching > 0) {
-    score += Math.min(0.35, teaching * 0.2);
+    score += Math.min(0.4, teaching * 0.22);
     reasons.push('Written to explain the subject, not to report a new result');
   }
 
@@ -145,7 +149,7 @@ export function pedagogy(paper: Paper): { score: number; reasons: string[] } {
   }
 
   if (DEFINING_TEXT.some((pattern) => pattern.test(abstract))) {
-    score += 0.2;
+    score += 0.25;
     reasons.push('The abstract defines its terms rather than assuming them');
   }
 
@@ -166,7 +170,7 @@ export function assessLevel(paper: Paper, topic: TopicSpec): LevelAssessment {
   const teach = pedagogy(paper);
 
   const level: Level =
-    teach.score >= 0.6 ? 'introductory' : teach.score >= 0.4 ? 'intermediate' : 'specialist';
+    teach.score >= 0.5 ? 'introductory' : teach.score >= 0.4 ? 'intermediate' : 'specialist';
 
   return {
     level,

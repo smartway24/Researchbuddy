@@ -31,15 +31,30 @@ test('NLM indexing counts as aboutness even without the title', () => {
 });
 
 test('teaching titles read as introductory, study titles as specialist', () => {
-  assert.ok(pedagogy(makePaper({ title: 'Understanding the Pressure-Volume Loop' })).score > 0.6);
-  assert.ok(pedagogy(makePaper({ title: 'A primer on ventricular mechanics' })).score > 0.6);
-  assert.ok(
-    pedagogy(
-      makePaper({ title: 'Validation of PV loop-derived cardiac output versus thermodilution' }),
-    ).score < 0.4,
+  // Assert the level, not the raw score: the score is an implementation
+  // detail and the level is what the reading list actually gates on.
+  const level = (title: string) => assessLevel(makePaper({ title }), pvLoop).level;
+
+  assert.equal(level('Understanding the Pressure-Volume Loop'), 'introductory');
+  assert.equal(level('A primer on ventricular mechanics'), 'introductory');
+  assert.equal(level('Physiology of the cardiac cycle'), 'introductory');
+
+  assert.equal(
+    level('Validation of PV loop-derived cardiac output versus thermodilution'),
+    'specialist',
   );
-  assert.ok(
-    pedagogy(makePaper({ title: 'Predictors of mortality in a single-centre cohort' })).score < 0.4,
+  assert.equal(level('Predictors of mortality in a single-centre cohort'), 'specialist');
+});
+
+test('a paper showing no sign of teaching anything is specialist by default', () => {
+  // This is what kept vancomycin pharmacokinetics on the ECMO foundations
+  // list: with no signal either way it used to land on the passing side.
+  assert.equal(
+    assessLevel(
+      makePaper({ title: 'Vancomycin population pharmacokinetics during ECMO support' }),
+      pvLoop,
+    ).level,
+    'specialist',
   );
 });
 
