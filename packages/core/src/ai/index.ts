@@ -8,6 +8,8 @@ export {
 export type {
   AiProvider,
   CardDraft,
+  JudgeOptions,
+  PaperJudgement,
   PaperSummary,
   ProviderCapabilities,
   SummarizeOptions,

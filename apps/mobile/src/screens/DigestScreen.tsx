@@ -31,7 +31,7 @@ export function DigestScreen({
   rung: RungId;
   onBack: () => void;
 }) {
-  const { database, markPapersSeen, sources } = useAppState();
+  const { canJudge, database, judge, markPapersSeen, sources } = useAppState();
   const topic = database.topics.find((candidate) => candidate.id === topicId);
 
   /**
@@ -40,7 +40,9 @@ export function DigestScreen({
    * synchronous setState in the effect, and no window where the previous
    * rung's papers render under the new rung's heading.
    */
-  const requestKey = `${topicId}|${rung}|${topic?.meshTerm ?? topic?.canonicalTerm ?? ''}`;
+  // `canJudge` is part of the key so the list is rebuilt once the keychain
+  // read lands, rather than leaving an unjudged list on screen.
+  const requestKey = `${topicId}|${rung}|${topic?.meshTerm ?? topic?.canonicalTerm ?? ''}|${canJudge ? 'judged' : 'heuristic'}`;
   const [result, setResult] = useState<{
     key: string;
     digest?: Digest;
@@ -64,6 +66,7 @@ export function DigestScreen({
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const judgeFor = judge();
 
     // Every state update below happens after an await, once the request this
     // effect owns has actually produced something.
@@ -80,6 +83,9 @@ export function DigestScreen({
           sources: sources(),
           seenPaperIds: seen,
           signal: controller.signal,
+          // Undefined when there is no key: the digest then judges with the
+          // deterministic heuristics instead, and still renders.
+          ...(judgeFor ? { judge: judgeFor } : {}),
         });
         if (controller.signal.aborted) return;
         setResult({ key: requestKey, digest: built });
@@ -97,7 +103,7 @@ export function DigestScreen({
     // `seen` is deliberately excluded: marking a paper read must not re-run the
     // search and reshuffle the list under the learner's finger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic, topicId, rung, sources, requestKey, reloadNonce]);
+  }, [topic, topicId, rung, sources, judge, requestKey, reloadNonce]);
 
   const reload = useCallback(() => setReloadNonce((nonce) => nonce + 1), []);
 
@@ -154,7 +160,11 @@ export function DigestScreen({
       {loading ? (
         <View style={styles.loading}>
           <ActivityIndicator />
-          <Muted>Searching PubMed and Europe PMC…</Muted>
+          <Muted>
+            {canJudge
+              ? 'Searching, then reading each paper to see which ones are for you…'
+              : 'Searching PubMed and Europe PMC…'}
+          </Muted>
         </View>
       ) : null}
 
@@ -172,6 +182,11 @@ export function DigestScreen({
         <>
           <Muted>
             {`${digest.readingOrder.length} of ${digest.candidateCount} papers kept · about ${estimatedMinutes(digest)} min`}
+          </Muted>
+          <Muted>
+            {canJudge
+              ? 'Each paper was read and judged on what it is about and who it is written for.'
+              : 'Judged from titles, abstracts and indexing. Add a Claude key in Settings to have each paper read instead.'}
           </Muted>
 
           {(() => {

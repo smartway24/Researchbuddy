@@ -192,7 +192,20 @@ export const RUNG_LEVEL_TARGET: Record<
   {
     levels: Level[];
     minAboutness: number;
+    /** Share of the score that suitability carries, judged by heuristics. */
     weight: number;
+    /**
+     * Share of the score it carries when something actually read the paper.
+     *
+     * Higher, deliberately. The heuristic assessment is a guess from title
+     * language, so it is kept to a minority of the score and the other signals
+     * — evidence level, recency, citations — hedge against it being wrong. A
+     * verdict from reading the abstract needs no such hedge, and on the
+     * teaching rungs it should beat them: the best introduction to
+     * pressure-volume loops was written in 2018, and no recency weighting
+     * should be able to push it below a 2026 paper that merely mentions them.
+     */
+    judgedWeight: number;
     /**
      * Exclude anything below this, rather than merely ranking it lower. On the
      * teaching rungs a specialist paper is not a worse answer, it is the wrong
@@ -208,24 +221,43 @@ export const RUNG_LEVEL_TARGET: Record<
     levels: ['introductory'],
     minAboutness: 0.6,
     weight: 0.45,
+    judgedWeight: 0.75,
     excludeBelow: 'introductory',
   },
   foundations: {
     levels: ['introductory', 'intermediate'],
     minAboutness: 0.5,
     weight: 0.4,
+    judgedWeight: 0.7,
     excludeBelow: 'intermediate',
   },
   mechanism: {
     levels: ['introductory', 'intermediate'],
     minAboutness: 0.5,
     weight: 0.3,
+    judgedWeight: 0.55,
     excludeBelow: 'intermediate',
   },
-  applied: { levels: ['intermediate', 'specialist'], minAboutness: 0.4, weight: 0.2 },
-  evidence: { levels: ['intermediate', 'specialist'], minAboutness: 0.4, weight: 0.15 },
-  // At the frontier a specialist paper is the point.
-  frontier: { levels: ['specialist', 'intermediate'], minAboutness: 0.4, weight: 0.15 },
+  applied: {
+    levels: ['intermediate', 'specialist'],
+    minAboutness: 0.4,
+    weight: 0.2,
+    judgedWeight: 0.35,
+  },
+  evidence: {
+    levels: ['intermediate', 'specialist'],
+    minAboutness: 0.4,
+    weight: 0.15,
+    judgedWeight: 0.25,
+  },
+  // At the frontier a specialist paper is the point, and recency is most of
+  // what makes it interesting — so the verdict gains least here.
+  frontier: {
+    levels: ['specialist', 'intermediate'],
+    minAboutness: 0.4,
+    weight: 0.15,
+    judgedWeight: 0.25,
+  },
 };
 
 function round(value: number): number {
@@ -236,6 +268,19 @@ const LEVEL_ORDER: Level[] = ['specialist', 'intermediate', 'introductory'];
 
 /** Is this paper pitched at or above the level the rung demands? */
 export function meetsLevel(assessment: LevelAssessment, floor: Level | undefined): boolean {
+  return levelAtLeast(assessment.level, floor);
+}
+
+/**
+ * The same gate over a bare level, for verdicts that did not come from
+ * `assessLevel` — a model reads the paper and returns a level, not a score.
+ */
+export function levelAtLeast(level: Level, floor: Level | undefined): boolean {
   if (!floor) return true;
-  return LEVEL_ORDER.indexOf(assessment.level) >= LEVEL_ORDER.indexOf(floor);
+  return LEVEL_ORDER.indexOf(level) >= LEVEL_ORDER.indexOf(floor);
+}
+
+/** Is this a level the model could plausibly have meant? Guards a parsed value. */
+export function isLevel(value: unknown): value is Level {
+  return value === 'introductory' || value === 'intermediate' || value === 'specialist';
 }

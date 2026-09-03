@@ -1,10 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Paper } from '../types.js';
 import { getRung } from '../ladder.js';
+import { isLevel } from '../level.js';
+import { topicTerms } from '../query.js';
 import { OfflineProvider } from './offline.js';
 import type {
   AiProvider,
   CardDraft,
+  JudgeOptions,
+  PaperJudgement,
   PaperSummary,
   ProviderCapabilities,
   SummarizeOptions,
@@ -43,6 +47,56 @@ Rules:
 - Keep numbers, units, and effect sizes exactly as written.
 - Be plain and direct. No hedging filler, no "it is important to note".
 - This is educational material, not clinical advice for a specific patient.`;
+
+/**
+ * The judgement prompt is the product.
+ *
+ * Everything else in this app is plumbing around one question a clinician asks
+ * themselves a hundred times an hour in PubMed: *is this worth my next twenty
+ * minutes?* The two axes below are that question, split so each can be
+ * answered independently — a paper can be squarely about the topic and still
+ * be unreadable at this stage, and the reading list has to know the difference.
+ */
+const JUDGE_SYSTEM_PROMPT = `You are the reading-list filter for a clinician teaching themselves a topic from primary literature.
+
+For each paper you get a title, journal, year, and the opening of the abstract. Judge exactly two things.
+
+ABOUTNESS, 0.0 to 1.0 — is the paper *about* the topic, or does it merely use it?
+  1.0  the topic is the subject of the work
+  0.7  the topic is one of a few things the work is about
+  0.4  the topic is a component of the thing being studied
+  0.2  the topic is the setting, the tool, or the population, not the subject
+  0.0  mentioned in passing, or this is a different thing that shares a name or acronym
+
+LEVEL — who is it written for?
+  "introductory"  teaches the concept from nothing; a reader who has never met it finishes understanding it
+  "intermediate"  assumes the vocabulary, and explains the mechanism or the reasoning
+  "specialist"    assumes the concept whole, and reports a new result, comparison, or refinement
+
+Rules that decide most cases:
+- Publication type is not level. A narrative review written for people who already use the technique is specialist; a case report written to teach a principle can be introductory.
+- A paper reporting what happened to a cohort is specialist, however clearly written.
+- A paper whose title promises to explain, introduce, demystify or walk through the topic is usually introductory — but only if the abstract keeps that promise rather than pivoting to a study.
+- Judge how the paper reads. Use only the supplied text; never facts you know about the paper from elsewhere.
+
+REASON — one clause, at most 14 words, in plain words, addressed to the learner. Say what the paper does for them, or why it will not help. No hedging, no restating the title.`;
+
+/**
+ * Papers per request. Big enough that judging 60 candidates is a handful of
+ * calls, small enough that one malformed reply does not cost the whole rung —
+ * anything missing falls back to the heuristic rather than disappearing.
+ */
+const JUDGE_BATCH_SIZE = 12;
+
+/** Batches in flight at once. See `judgePapers`. */
+const JUDGE_CONCURRENCY = 3;
+
+/**
+ * How much abstract the model sees. The first paragraph is where a paper
+ * announces who it is talking to; past that it is methods, and methods all
+ * read the same.
+ */
+const JUDGE_ABSTRACT_CHARS = 900;
 
 export class AnthropicProvider implements AiProvider {
   readonly id = 'anthropic';
@@ -141,12 +195,132 @@ Reply with JSON only, no prose around it:
     }
   }
 
-  private async completeJson<T>(prompt: string, signal?: AbortSignal): Promise<T> {
+  async judgePapers(papers: Paper[], options: JudgeOptions): Promise<PaperJudgement[]> {
+    if (papers.length === 0) return [];
+
+    const names = topicTerms(options.topic);
+    const rung = getRung(options.rung);
+
+    const batches: Paper[][] = [];
+    for (let index = 0; index < papers.length; index += JUDGE_BATCH_SIZE) {
+      batches.push(papers.slice(index, index + JUDGE_BATCH_SIZE));
+    }
+
+    // A few batches at a time. Sequentially, a first visit to a rung with 90
+    // candidates is eight round trips and most of a minute of spinner; all at
+    // once is eight sockets from a phone on cellular and a rate limit waiting
+    // at the end. Verdicts are cached, so this is paid once per paper ever.
+    const judgements: PaperJudgement[] = [];
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < batches.length) {
+        if (options.signal?.aborted) return;
+        const batch = batches[next++];
+        if (!batch) return;
+        try {
+          judgements.push(...(await this.judgeBatch(batch, names, rung, options.signal)));
+        } catch (error) {
+          // An aborted request means the learner left the screen; stop rather
+          // than spending their key on results nobody will see.
+          if (options.signal?.aborted) return;
+          if (!this.fallbackOnError) throw error;
+          // Otherwise leave this batch unjudged. The caller fills the gap from
+          // the deterministic assessment, so one bad batch costs quality on
+          // twelve papers rather than on the whole reading list.
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(JUDGE_CONCURRENCY, batches.length) }, () => worker()),
+    );
+
+    return judgements;
+  }
+
+  private async judgeBatch(
+    papers: Paper[],
+    names: string[],
+    rung: { title: string; goal: string },
+    signal?: AbortSignal,
+  ): Promise<PaperJudgement[]> {
+    const listed = papers
+      .map((paper, index) => {
+        const abstract = (paper.abstract ?? '').replace(/\s+/g, ' ').trim();
+        return [
+          `[${index + 1}]`,
+          `Title: ${paper.title}`,
+          `Journal: ${paper.journal ?? 'unknown'} (${paper.year ?? 'year unknown'})`,
+          `Types: ${paper.publicationTypes.join(', ') || 'unindexed'}`,
+          abstract
+            ? `Abstract: ${abstract.slice(0, JUDGE_ABSTRACT_CHARS)}${abstract.length > JUDGE_ABSTRACT_CHARS ? '…' : ''}`
+            : 'Abstract: none indexed.',
+        ].join('\n');
+      })
+      .join('\n\n');
+
+    const prompt = `Topic: ${names[0]}${names.length > 1 ? `\nAlso called: ${names.slice(1).join(', ')}` : ''}
+
+The learner is at the "${rung.title}" stage: ${rung.goal}
+
+Judge each paper below.
+
+${listed}
+
+Reply with JSON only, no prose around it, one entry per paper, in order:
+{"judgements": [{"n": 1, "aboutness": 0.0, "level": "introductory|intermediate|specialist", "reason": "one clause"}]}`;
+
+    const parsed = await this.completeJson<{ judgements?: unknown }>(
+      prompt,
+      signal,
+      JUDGE_SYSTEM_PROMPT,
+    );
+
+    const raw = Array.isArray(parsed.judgements) ? parsed.judgements : [];
+    const judgements: PaperJudgement[] = [];
+
+    for (const [position, entry] of raw.entries()) {
+      if (!entry || typeof entry !== 'object') continue;
+      const record = entry as Record<string, unknown>;
+
+      // Trust `n` when it is a usable index and fall back to position, so a
+      // model that drops the field still lines up with the right paper.
+      const numbered = Number(record.n);
+      const index =
+        Number.isInteger(numbered) && numbered >= 1 && numbered <= papers.length
+          ? numbered - 1
+          : position;
+      const paper = papers[index];
+      if (!paper) continue;
+
+      const level = record.level;
+      if (!isLevel(level)) continue;
+
+      const aboutness = Number(record.aboutness);
+      if (!Number.isFinite(aboutness)) continue;
+
+      const reason = String(record.reason ?? '').trim();
+      judgements.push({
+        paperId: paper.id,
+        aboutness: Math.max(0, Math.min(1, aboutness)),
+        level,
+        reason: reason || `Judged as ${level} reading on this topic.`,
+      });
+    }
+
+    return judgements;
+  }
+
+  private async completeJson<T>(
+    prompt: string,
+    signal?: AbortSignal,
+    system: string = SYSTEM_PROMPT,
+  ): Promise<T> {
     const response = await this.client.messages.create(
       {
         model: this.model,
         max_tokens: 4096,
-        system: SYSTEM_PROMPT,
+        system,
         // `thinking` is deliberately omitted: on the default model it runs
         // adaptively when unset, and the installed SDK's types predate the
         // adaptive option. Do not reintroduce `budget_tokens` here — current

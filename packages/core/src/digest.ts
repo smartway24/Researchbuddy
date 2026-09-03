@@ -1,7 +1,8 @@
 import { clusterByTheme } from './concepts.js';
 import { getRung } from './ladder.js';
 import { planForRung, topicTerms, type TopicSpec } from './query.js';
-import { aboutness, assessLevel, meetsLevel, RUNG_LEVEL_TARGET } from './level.js';
+import { levelAtLeast, RUNG_LEVEL_TARGET } from './level.js';
+import { heuristicJudgement, type Judgements, type PaperJudge } from './judge.js';
 import { evidenceLabel, matchesTopic, rankPapers } from './rank.js';
 import { searchAll } from './sources/registry.js';
 import type { SourceAdapter } from './sources/types.js';
@@ -25,6 +26,13 @@ export interface BuildDigestOptions {
   seenPaperIds?: Set<string>;
   /** Cap on papers in the finished digest. */
   maxPapers?: number;
+  /**
+   * The critical eye. Supplied by `buildDigest`; without one every paper is
+   * judged by the deterministic heuristics instead.
+   */
+  judge?: PaperJudge;
+  /** Verdicts, when they have already been formed. `assembleDigest` uses these. */
+  judgements?: Judgements;
   now?: Date;
   signal?: AbortSignal;
 }
@@ -39,7 +47,26 @@ export async function buildDigest(options: BuildDigestOptions): Promise<Digest> 
     plan,
     ...(options.signal ? { signal: options.signal } : {}),
   });
-  return { ...assembleDigest(federated.papers, options), sourceStatus: federated.bySource };
+
+  // Judge before assembling, and only what could plausibly survive: a keyword
+  // match is free, and there is no reason to spend the learner's API key
+  // reading a paper that is about a different subject entirely.
+  const judgeable = federated.papers.filter((paper) => matchesTopic(paper, options.context));
+  const judgements = options.judge
+    ? await options.judge.judge(judgeable, {
+        rung: options.rung,
+        topic: options.context,
+        ...(options.signal ? { signal: options.signal } : {}),
+      })
+    : undefined;
+
+  return {
+    ...assembleDigest(federated.papers, {
+      ...options,
+      ...(judgements ? { judgements } : {}),
+    }),
+    sourceStatus: federated.bySource,
+  };
 }
 
 /**
@@ -84,18 +111,24 @@ export function assembleDigest(papers: Paper[], options: BuildDigestOptions): Di
   // still scores well, so it has to be excluded before scoring, not after.
   const target = RUNG_LEVEL_TARGET[options.rung];
   const minAboutness = target?.minAboutness ?? 0;
-  const relevant = papers.filter(
-    (paper) =>
-      matchesTopic(paper, options.context) &&
-      aboutness(paper, options.context).score >= minAboutness &&
-      meetsLevel(assessLevel(paper, options.context), target?.excludeBelow),
-  );
+  const judgements = options.judgements;
+
+  const relevant = papers.filter((paper) => {
+    if (!matchesTopic(paper, options.context)) return false;
+    // One verdict per paper, from the model when there is one and from the
+    // heuristics otherwise — the gate does not care which, only that every
+    // paper was judged on the same two axes.
+    const verdict =
+      judgements?.get(paper.id)?.judgement ?? heuristicJudgement(paper, options.context);
+    return verdict.aboutness >= minAboutness && levelAtLeast(verdict.level, target?.excludeBelow);
+  });
   const fresh = relevant.filter((paper) => !seen.has(paper.id));
 
   const scoreOptions: Parameters<typeof rankPapers>[1] = {
     rung: options.rung,
     topic: options.context,
     now,
+    ...(judgements ? { judgements } : {}),
   };
   const focus = options.focusTerms?.length ? options.focusTerms : topicTerms(options.context);
   if (focus.length > 0) scoreOptions.focusTerms = focus;

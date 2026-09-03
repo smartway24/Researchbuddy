@@ -1,4 +1,11 @@
-import { defaultSources, resolveMeshTopic, withCache, type Topic } from '@researchbuddy/core';
+import {
+  defaultSources,
+  PaperJudge,
+  resolveMeshTopic,
+  withCache,
+  type Topic,
+} from '@researchbuddy/core';
+import { AnthropicProvider } from '@researchbuddy/core/anthropic';
 import {
   createContext,
   useCallback,
@@ -10,7 +17,8 @@ import {
   type ReactNode,
 } from 'react';
 import { NCBI_CONTACT_EMAIL, NCBI_TOOL_NAME } from '../config';
-import { searchCache } from './cache';
+import { judgementCache, searchCache } from './cache';
+import { getAnthropicKey } from './keys';
 import { emptyDatabase, loadDatabase, saveDatabase, type Database, type Settings } from './db';
 
 interface AppStateValue {
@@ -27,6 +35,24 @@ interface AppStateValue {
   markPapersSeen(topicId: string, paperIds: string[]): void;
   updateSettings(patch: Partial<Settings>): void;
   sources(): ReturnType<typeof defaultSources>;
+  /**
+   * The critical eye, when the learner has supplied a key for one.
+   *
+   * Undefined means no model is available, and the reading list falls back to
+   * the deterministic assessment in core — the app has to work with no AI, no
+   * account and no network, so this is allowed to be absent at any moment.
+   */
+  judge(): PaperJudge | undefined;
+  /**
+   * Whether `judge()` will return one right now.
+   *
+   * A separate flag because the key is read from the keychain asynchronously:
+   * for the first frames after launch the settings say there is a key and
+   * `judge()` still returns undefined. A screen that keyed its work off the
+   * settings alone would build one unjudged reading list and then never
+   * notice the key had arrived.
+   */
+  canJudge: boolean;
 }
 
 const AppStateContext = createContext<AppStateValue | null>(null);
@@ -34,6 +60,7 @@ const AppStateContext = createContext<AppStateValue | null>(null);
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [database, setDatabase] = useState<Database>(emptyDatabase);
   const [ready, setReady] = useState(false);
+  const [apiKey, setApiKey] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -47,6 +74,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // The key lives in the keychain, not in the database, so it is read
+  // separately — and re-read whenever the settings say it changed, which is
+  // how saving a key in Settings reaches the reading list without a restart.
+  useEffect(() => {
+    let cancelled = false;
+    const pending = database.settings.hasApiKey
+      ? getAnthropicKey().catch(() => null)
+      : Promise.resolve(null);
+    void pending.then((stored) => {
+      if (!cancelled) setApiKey(stored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [database.settings.hasApiKey]);
 
   // Debounced persistence: a burst of edits should not rewrite the whole store
   // on every keystroke.
@@ -147,6 +190,23 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [database.settings.ncbiApiKey],
   );
 
+  /**
+   * The judgement pass, built fresh per reading list.
+   *
+   * `dangerouslyAllowBrowser` is correct here and nowhere else: the key is the
+   * learner's own, held in their keychain, and there is no server to hold it
+   * on instead. Verdicts are cached, so a paper is read once and then never
+   * billed again.
+   */
+  const canJudge = database.settings.aiProvider === 'anthropic' && Boolean(apiKey);
+
+  const judge = useCallback(() => {
+    if (database.settings.aiProvider !== 'anthropic' || !apiKey) return undefined;
+    return new PaperJudge(new AnthropicProvider({ apiKey, allowBrowser: true }), {
+      cache: judgementCache,
+    });
+  }, [database.settings.aiProvider, apiKey]);
+
   const value = useMemo<AppStateValue>(
     () => ({
       ready,
@@ -157,8 +217,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       markPapersSeen,
       updateSettings,
       sources,
+      judge,
+      canJudge,
     }),
-    [ready, database, addTopic, enrichTopic, removeTopic, markPapersSeen, updateSettings, sources],
+    [
+      ready,
+      database,
+      addTopic,
+      enrichTopic,
+      removeTopic,
+      markPapersSeen,
+      updateSettings,
+      sources,
+      judge,
+      canJudge,
+    ],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

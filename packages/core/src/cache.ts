@@ -40,11 +40,20 @@ export interface CacheOptions {
   ttlMs?: number;
   /** Cap on stored entries; the oldest are evicted past this. Default 200. */
   maxEntries?: number;
+  /**
+   * Key prefix, and with it the eviction index this cache owns.
+   *
+   * Two caches over the same store must not share a namespace: they would
+   * share an index, and each would evict the other's entries to stay under
+   * its own cap. Searches and judgements have very different sizes and
+   * lifetimes, so they get a namespace each.
+   */
+  namespace?: string;
   now?: () => Date;
 }
 
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
-const INDEX_KEY = 'researchbuddy.cache.index';
+const DEFAULT_NAMESPACE = 'researchbuddy.cache';
 
 /**
  * A TTL cache over a key/value store, with its own index so it can evict
@@ -54,6 +63,8 @@ const INDEX_KEY = 'researchbuddy.cache.index';
 export class Cache {
   private readonly ttlMs: number;
   private readonly maxEntries: number;
+  private readonly namespace: string;
+  private readonly indexKey: string;
   private readonly now: () => Date;
 
   constructor(
@@ -62,6 +73,8 @@ export class Cache {
   ) {
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     this.maxEntries = options.maxEntries ?? 200;
+    this.namespace = options.namespace ?? DEFAULT_NAMESPACE;
+    this.indexKey = `${this.namespace}.index`;
     this.now = options.now ?? (() => new Date());
   }
 
@@ -106,7 +119,7 @@ export class Cache {
     for (const key of Object.keys(index)) {
       await this.store.remove(this.namespaced(key)).catch(() => undefined);
     }
-    await this.store.remove(INDEX_KEY).catch(() => undefined);
+    await this.store.remove(this.indexKey).catch(() => undefined);
   }
 
   async size(): Promise<number> {
@@ -114,11 +127,11 @@ export class Cache {
   }
 
   private namespaced(key: string): string {
-    return `researchbuddy.cache.${key}`;
+    return `${this.namespace}.${key}`;
   }
 
   private async readIndex(): Promise<Record<string, string>> {
-    const raw = await this.store.get(INDEX_KEY).catch(() => null);
+    const raw = await this.store.get(this.indexKey).catch(() => null);
     if (!raw) return {};
     try {
       const parsed = JSON.parse(raw) as Record<string, string>;
@@ -143,7 +156,7 @@ export class Cache {
       }
     }
 
-    await this.store.set(INDEX_KEY, JSON.stringify(index));
+    await this.store.set(this.indexKey, JSON.stringify(index));
   }
 }
 
@@ -156,7 +169,7 @@ export function searchCacheKey(sourceId: string, query: SearchQuery): string {
     String(query.fromYear ?? ''),
     String(query.toYear ?? ''),
   ];
-  return `search.${hash(parts.join('|'))}`;
+  return `search.${stableHash(parts.join('|'))}`;
 }
 
 /**
@@ -221,7 +234,7 @@ export class MemoryStore implements KeyValueStore {
 }
 
 /** FNV-1a: short, stable, and enough to key a local cache. */
-function hash(input: string): string {
+export function stableHash(input: string): string {
   let value = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
     value ^= input.charCodeAt(i);

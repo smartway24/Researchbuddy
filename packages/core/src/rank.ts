@@ -1,4 +1,5 @@
-import { assessLevel, RUNG_LEVEL_TARGET } from './level.js';
+import { assessLevel, RUNG_LEVEL_TARGET, type Level } from './level.js';
+import { type Judgements } from './judge.js';
 import { topicTerms, type TopicSpec } from './query.js';
 import type { EvidenceLevel, Paper, RungId, ScoredPaper } from './types.js';
 
@@ -132,15 +133,30 @@ export interface ScoreOptions {
   topic?: TopicSpec;
   /** Terms the learner is studying now; overlap raises topical fit. */
   focusTerms?: string[];
+  /**
+   * Verdicts from the judgement pass. When a paper has one it decides
+   * suitability and supplies the first reason shown — a sentence from
+   * something that read the abstract beats a sentence from a pattern list.
+   */
+  judgements?: Judgements;
   now?: Date;
   /** Recency half-life in years. Short for the frontier, long for foundations. */
   halfLifeYears?: number;
 }
 
+/**
+ * Recency half-life, in years, per rung.
+ *
+ * Long on the teaching rungs and short at the frontier, because that is how
+ * the reading actually ages. What a pressure-volume loop is has not changed
+ * since it was described; which device to use in cardiogenic shock changed
+ * last year. An eight-year half-life on orientation was quietly ranking a
+ * 2026 paper that mentions a concept above the 2018 paper that teaches it.
+ */
 const DEFAULT_HALF_LIFE: Record<RungId, number> = {
-  orientation: 8,
-  foundations: 15,
-  mechanism: 12,
+  orientation: 25,
+  foundations: 30,
+  mechanism: 20,
   applied: 7,
   evidence: 12,
   frontier: 1.5,
@@ -181,19 +197,30 @@ export function scorePaper(paper: Paper, options: ScoreOptions): ScoredPaper {
   // Is it about the topic, and is it pitched where the learner is? On the
   // lower rungs this matters more than anything else about the paper.
   const target = RUNG_LEVEL_TARGET[options.rung];
+  const verdict = options.judgements?.get(paper.id);
   let suitability = 0.5;
-  if (options.topic && target) {
+  if (verdict && target) {
+    const { judgement } = verdict;
+    const levelFit = levelFitFor(judgement.level, target.levels);
+    // A verdict carries no pedagogy score: something that read the paper and
+    // called it introductory has already made that judgement, so level fit
+    // stands on its own rather than being multiplied by a proxy for itself.
+    suitability = 0.5 * judgement.aboutness + 0.5 * levelFit;
+    reasons.unshift(judgement.reason);
+  } else if (options.topic && target) {
     const assessment = assessLevel(paper, options.topic);
-    const levelFit = target.levels.includes(assessment.level)
-      ? 1
-      : target.levels.length > 0 && assessment.level === 'intermediate'
-        ? 0.5
-        : 0.15;
+    const levelFit = levelFitFor(assessment.level, target.levels);
     suitability = 0.5 * assessment.aboutness + 0.5 * levelFit * assessment.pedagogy;
     reasons.unshift(...assessment.reasons.slice(0, 2));
   }
 
-  const levelWeight = options.topic && target ? target.weight : 0;
+  const levelWeight = target
+    ? verdict
+      ? target.judgedWeight
+      : options.topic
+        ? target.weight
+        : 0
+    : 0;
   const rest = 1 - levelWeight;
   const score = round(
     (levelWeight * suitability +
@@ -250,6 +277,12 @@ export function evidenceLabel(level: EvidenceLevel): string {
     case 'other':
       return 'Uncategorised';
   }
+}
+
+/** How well a level suits a rung: wanted, adjacent, or wrong. */
+function levelFitFor(level: Level, wanted: Level[]): number {
+  if (wanted.includes(level)) return 1;
+  return wanted.length > 0 && level === 'intermediate' ? 0.5 : 0.15;
 }
 
 function describeFit(preference: number): string {

@@ -1,7 +1,10 @@
+import { heuristicJudgement } from '../judge.js';
 import type { Paper } from '../types.js';
 import type {
   AiProvider,
   CardDraft,
+  JudgeOptions,
+  PaperJudgement,
   PaperSummary,
   ProviderCapabilities,
   SummarizeOptions,
@@ -108,6 +111,17 @@ export class OfflineProvider implements AiProvider {
     }
 
     return drafts.slice(0, wanted);
+  }
+
+  /**
+   * The heuristic critical eye, from `level.ts`: title language, abstract
+   * language, and NLM's indexing. It is right about the obvious cases and
+   * wrong about the interesting ones, which is precisely why a model-backed
+   * provider exists — but it needs no key, no network, and no permission, so
+   * it is what the app judges with by default.
+   */
+  async judgePapers(papers: Paper[], options: JudgeOptions): Promise<PaperJudgement[]> {
+    return papers.map((paper) => heuristicJudgement(paper, options.topic));
   }
 }
 

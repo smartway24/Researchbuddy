@@ -6,11 +6,13 @@ export * from './rank.js';
 export * from './concepts.js';
 export * from './digest.js';
 export * from './level.js';
+export * from './judge.js';
 export {
   Cache,
   CachingSource,
   MemoryStore,
   searchCacheKey,
+  stableHash,
   withCache,
   type CacheEntry,
   type CacheOptions,

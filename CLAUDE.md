@@ -15,6 +15,12 @@
   path has a deterministic fallback, and every screen renders from cache first.
 - **Never surface a ranking without its reasons.** `ScoredPaper.reasons` is rendered
   in the UI; anything that changes scoring should say why in plain words.
+- **Judgement is a layer, not a filter.** Retrieval (`query.ts`) is a keyword problem
+  and is allowed to be broad. Deciding what a paper is *about* and *who it is for*
+  happens after retrieval, in `judge.ts`, and the model does it by reading the
+  abstract. `level.ts` holds the deterministic version of the same two axes and is
+  the fallback, never the ceiling — if a paper is being kept or dropped wrongly,
+  reach for the prompt or the rung target before adding another regex.
 - **Never fetch, cache, or re-host paywalled full text.** Access is link resolution
   only (`sources/access.ts`), and library credentials are never stored.
 - **Cite everything.** Concepts and cards keep the paper ids they came from. Never

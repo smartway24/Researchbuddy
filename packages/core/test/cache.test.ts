@@ -181,3 +181,21 @@ test('a digest with no source status reports neither live nor cached', () => {
   assert.equal(freshness.cached, false);
   assert.equal(freshness.savedAt, undefined);
 });
+
+test('two caches over one store do not evict each other', async () => {
+  // They shared a single eviction index until this was fixed, so filling one
+  // cache silently deleted the other's entries — a judgement pass would have
+  // wiped the search cache it depends on.
+  const store = new MemoryStore();
+  const searches = new Cache(store, { namespace: 'rb.search', maxEntries: 2 });
+  const judgements = new Cache(store, { namespace: 'rb.judge', maxEntries: 50 });
+
+  await judgements.set('paper-1', { level: 'introductory' });
+  for (const key of ['a', 'b', 'c', 'd']) await searches.set(key, { key });
+
+  assert.equal(await searches.size(), 2, 'the search cache evicted down to its own cap');
+  assert.equal(await judgements.size(), 1);
+  assert.deepEqual((await judgements.get<{ level: string }>('paper-1'))?.value, {
+    level: 'introductory',
+  });
+});
